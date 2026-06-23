@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -52,3 +53,9 @@ prompt
 server.log
 # Skills directory
 /skills/
+# Local artifacts (not for the repo)
+/upload/
+/verify-*.png
+supervisor.log
+keepalive.log
+db/*.db
