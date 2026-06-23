@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Check, Sparkles } from "lucide-react";
-import { steps, plans } from "./site-data";
+import { steps, plans, DOWNLOAD_URL } from "./site-data";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -62,11 +62,11 @@ export function Pricing() {
             Simple, honest pricing
           </p>
           <h2 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-stone-900 sm:text-5xl">
-            Pay once. Use it forever.
+            Pick a plan that fits your kitchen
           </h2>
           <p className="mt-4 text-lg text-stone-600">
-            No monthly cloud fees. No per-bill charges. No surprises. Start free for
-            14 days, then pick the plan that fits.
+            Start with Monthly or save more with Half-Yearly and Yearly. Full premium
+            POS access on every plan — no per-bill charges, no lock-in.
           </p>
         </div>
 
@@ -121,14 +121,14 @@ export function Pricing() {
                 )}
                 variant={plan.highlighted ? "default" : "outline"}
               >
-                <a href="#download">{plan.cta}</a>
+                <a href={DOWNLOAD_URL} target="_blank" rel="noopener noreferrer">{plan.cta}</a>
               </Button>
             </div>
           ))}
         </div>
 
         <p className="mt-8 text-center text-sm text-stone-500">
-          Prices in INR, inclusive of all taxes. Premium license is valid for one PC.
+          Prices in INR, inclusive of all taxes. Each plan covers 1 store on 1 PC. Download the app and activate your plan inside, or message us on WhatsApp.
         </p>
       </div>
     </section>

@@ -1,4 +1,5 @@
 import { LogoMark } from "./logo";
+import { DOWNLOAD_URL } from "./site-data";
 import { Mail, Phone, MapPin, MessageCircle } from "lucide-react";
 
 const footerNav = [
@@ -50,7 +51,7 @@ export function Footer() {
             <p className="mt-4 max-w-sm text-sm leading-relaxed text-stone-600">
               The offline Restaurant POS &amp; billing software built for Indian
               restaurants, dhabas, cafés and cloud kitchens. Bill faster, track smarter,
-              pay once.
+              with plans from ₹99/month.
             </p>
 
             <div className="mt-5 space-y-2 text-sm">
@@ -112,7 +113,7 @@ export function Footer() {
             <a href="#top" className="transition-colors hover:text-amber-600">
               Terms
             </a>
-            <a href="#download" className="transition-colors hover:text-amber-600">
+            <a href={DOWNLOAD_URL} target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-amber-600">
               Download
             </a>
           </div>

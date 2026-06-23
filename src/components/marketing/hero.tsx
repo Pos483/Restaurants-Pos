@@ -1,9 +1,9 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Download, PlayCircle, Wifi, ShieldCheck, Star } from "lucide-react";
+import { Download, PlayCircle, Wifi, ShieldCheck, BadgeIndianRupee } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { stats } from "./site-data";
+import { stats, DOWNLOAD_URL } from "./site-data";
 
 export function Hero() {
   return (
@@ -25,7 +25,7 @@ export function Hero() {
             className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white/70 px-3.5 py-1.5 text-xs font-semibold text-amber-700 shadow-sm backdrop-blur hover:bg-white"
           >
             <span className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" />
-            One-time pricing · No monthly fees
+            Plans from ₹99/month · No lock-in
             <span className="text-amber-400">→</span>
           </motion.a>
 
@@ -62,9 +62,9 @@ export function Hero() {
               size="lg"
               className="h-12 w-full bg-gradient-to-r from-amber-500 to-orange-600 px-7 text-base text-white shadow-warm-lg hover:from-amber-600 hover:to-orange-700 sm:w-auto"
             >
-              <a href="#download">
+              <a href={DOWNLOAD_URL} target="_blank" rel="noopener noreferrer">
                 <Download className="mr-2 h-5 w-5" />
-                Download Free Trial
+                Download for Windows
               </a>
             </Button>
             <Button
@@ -90,10 +90,10 @@ export function Hero() {
               <Wifi className="h-4 w-4 text-amber-600" /> Works offline
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <ShieldCheck className="h-4 w-4 text-amber-600" /> Pay once, use forever
+              <ShieldCheck className="h-4 w-4 text-amber-600" /> Full premium access
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <Star className="h-4 w-4 fill-amber-400 text-amber-400" /> 14-day free trial
+              <BadgeIndianRupee className="h-4 w-4 text-amber-600" /> Plans from ₹99/mo
             </span>
           </motion.div>
         </div>

@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Download, CheckCircle2, Loader2, ShieldCheck, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
+import { DOWNLOAD_URL } from "./site-data";
 
 export function DownloadCta() {
   const [email, setEmail] = useState("");
@@ -25,7 +26,7 @@ export function DownloadCta() {
       setDone(true);
       toast({
         title: "You're on the list!",
-        description: "Your free trial download is starting.",
+        description: "Your Siya Bill download is ready.",
       });
     } catch {
       toast({
@@ -55,21 +56,22 @@ export function DownloadCta() {
           <div className="relative grid items-center gap-10 lg:grid-cols-2">
             <div>
               <p className="text-sm font-semibold uppercase tracking-widest text-amber-400">
-                Start free today
+                Get started today
               </p>
               <h2 className="mt-3 font-display text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl">
                 Get Siya Bill on your PC
               </h2>
               <p className="mt-4 max-w-md text-lg text-stone-300">
-                Download the 14-day free trial — every feature unlocked. No credit card,
-                no cloud signup. Love it? Pay once for a lifetime license.
+                Download the full Siya Bill software for your Windows PC. Install in
+                minutes, pick a plan from ₹99/month, and start billing. No cloud signup,
+                no per-bill charges.
               </p>
 
               <ul className="mt-6 space-y-2.5">
                 {[
-                  "Full-feature 14-day free trial",
+                  "Full premium POS software",
                   "Windows 7, 10 & 11 supported",
-                  "Lifetime license — no monthly fees",
+                  "Plans from ₹99/month — no lock-in",
                 ].map((t) => (
                   <li key={t} className="flex items-center gap-2.5 text-sm text-stone-200">
                     <CheckCircle2 className="h-5 w-5 shrink-0 text-amber-400" />
@@ -84,7 +86,7 @@ export function DownloadCta() {
                   size="lg"
                   className="h-12 bg-gradient-to-r from-amber-500 to-orange-600 px-7 text-base text-white shadow-warm-lg hover:from-amber-600 hover:to-orange-700"
                 >
-                  <a href="#download">
+                  <a href={DOWNLOAD_URL} target="_blank" rel="noopener noreferrer">
                     <Download className="mr-2 h-5 w-5" />
                     Download for Windows
                   </a>
@@ -104,9 +106,18 @@ export function DownloadCta() {
                   </span>
                   <h3 className="mt-4 font-display text-xl font-bold">Thank you!</h3>
                   <p className="mt-1 text-sm text-stone-300">
-                    Your download link has been sent to your inbox. Check your email for
-                    the Siya Bill installer.
+                    Your download link has been sent to your inbox. You can also grab the
+                    installer directly below.
                   </p>
+                  <Button
+                    asChild
+                    className="mt-5 h-12 bg-gradient-to-r from-amber-500 to-orange-600 px-6 text-base text-white shadow-warm hover:from-amber-600 hover:to-orange-700"
+                  >
+                    <a href={DOWNLOAD_URL} target="_blank" rel="noopener noreferrer">
+                      <Download className="mr-2 h-5 w-5" />
+                      Download installer now
+                    </a>
+                  </Button>
                 </div>
               ) : (
                 <form onSubmit={onSubmit} className="space-y-4">

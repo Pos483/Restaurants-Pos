@@ -14,6 +14,10 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+// Real installer download link (Google Drive share URL)
+export const DOWNLOAD_URL =
+  "https://drive.google.com/file/d/1kn_Okn-vHj-_2XxfBGfEhlS2ekr9Yr_R/view?usp=sharing";
+
 export type Feature = {
   icon: LucideIcon;
   title: string;
@@ -90,8 +94,8 @@ export const features: Feature[] = [
   },
   {
     icon: ShieldCheck,
-    title: "One-Time Pricing",
-    desc: "Pay once, use forever. No monthly cloud fees, no per-bill charges, no surprises.",
+    title: "Flexible Plans",
+    desc: "Monthly, half-yearly or yearly — from just ₹99 a month. Full premium access, no per-bill charges, no lock-in.",
     accent: "from-orange-600 to-amber-500",
   },
 ];
@@ -226,51 +230,45 @@ export type Plan = {
 
 export const plans: Plan[] = [
   {
-    name: "Free Trial",
-    price: "₹0",
-    period: "14 days",
-    tagline: "Try every feature, no card needed.",
+    name: "Monthly",
+    price: "₹99",
+    period: "30 days",
+    tagline: "Complete full premium access for 30 days.",
     features: [
-      "Full feature access for 14 days",
-      "Dine-In, Quick & Kitchen billing",
-      "GST, P&L & inventory reports",
-      "Khata & customer CRM",
-      "Thermal printer support",
-      "No credit card required",
+      "Full POS access",
+      "WhatsApp support",
+      "Priority support",
+      "1 Store",
     ],
-    cta: "Download Free Trial",
+    cta: "Buy Premium Plan",
   },
   {
-    name: "Premium",
-    price: "₹4,999",
-    period: "one-time",
-    tagline: "Pay once, use forever. No monthly fees.",
+    name: "Half-Yearly",
+    price: "₹499",
+    period: "180 days",
+    tagline: "Complete full premium access for 180 days. Save 16%.",
     features: [
-      "Everything in Free Trial",
-      "Lifetime license — 1 PC",
-      "Unlimited bills & customers",
-      "WhatsApp broadcast & reminders",
-      "GST + UPI QR on every bill",
-      "Priority support & free updates",
+      "Full POS access",
+      "WhatsApp support",
+      "Priority support",
+      "1 Store",
     ],
-    cta: "Buy Premium",
+    cta: "Buy Premium Plan",
+  },
+  {
+    name: "Yearly",
+    price: "₹999",
+    period: "365 days",
+    tagline: "Complete full premium access for 365 days. Best value.",
+    features: [
+      "Full POS access",
+      "WhatsApp support",
+      "Priority support",
+      "1 Store",
+    ],
+    cta: "Buy Premium Plan",
     highlighted: true,
     badge: "Best Value",
-  },
-  {
-    name: "Multi-Outlet",
-    price: "Custom",
-    period: "talk to us",
-    tagline: "For chains & multiple outlets.",
-    features: [
-      "Everything in Premium",
-      "Licenses for multiple PCs",
-      "Multi-outlet setup",
-      "Onboarding & training",
-      "Dedicated account manager",
-      "Bulk pricing",
-    ],
-    cta: "Contact Sales",
   },
 ];
 
@@ -278,7 +276,7 @@ export const stats = [
   { value: "500+", label: "Restaurants served" },
   { value: "12L+", label: "Bills generated" },
   { value: "99.9%", label: "Uptime, offline-first" },
-  { value: "₹0", label: "Monthly cloud fees" },
+  { value: "₹99/mo", label: "Plans start at" },
 ];
 
 export const testimonials = [
@@ -319,16 +317,16 @@ export const faqs = [
     a: "Yes. You can add your GSTIN, FSSAI code, store address, contact and a dynamic UPI payment QR code on every receipt. All of these are toggleable from Settings.",
   },
   {
-    q: "Is there a monthly subscription fee?",
-    a: "No. Siya Bill Premium is a one-time payment — pay once and use it forever on your PC. There are no monthly cloud fees and no per-bill charges.",
+    q: "How do the plans and pricing work?",
+    a: "Siya Bill offers three simple plans: Monthly (₹99 / 30 days), Half-Yearly (₹499 / 180 days) and Yearly (₹999 / 365 days). Every plan includes full premium POS access, WhatsApp & priority support, and 1 store license. No per-bill charges, no lock-in — pick the duration that suits you.",
   },
   {
     q: "Can I import my existing menu?",
     a: "Absolutely. You can bulk-import your entire menu with categories, prices and half/full rates directly from an Excel or CSV file. No need to enter items one by one.",
   },
   {
-    q: "What happens after the 14-day free trial?",
-    a: "After 14 days you can purchase a Premium lifetime license to keep all features. Your data is never deleted — everything you've created during the trial stays intact.",
+    q: "How do I activate my plan?",
+    a: "Download and install Siya Bill from the link on this page, then choose a plan inside the app or message us on WhatsApp. Your plan activates instantly and unlocks full premium access for the chosen period. Your menu, bills and customer data always stay saved on your PC.",
   },
   {
     q: "Which operating systems are supported?",

@@ -69,3 +69,29 @@ Stage Summary:
 - Working backend lead-capture API with SQLite persistence.
 - Lint clean, zero runtime errors, all core interactions browser-verified.
 - Dev server runs on port 3000 (start with `bun run dev`); preview via the right-side Preview Panel.
+
+---
+Task ID: 6
+Agent: Main (Z.ai Code)
+Task: Add the real Electron installer download link (Google Drive) and replace pricing with the user's actual subscription plans (Monthly ₹99/30d, Half-Yearly ₹499/180d, Yearly ₹999/365d).
+
+Work Log:
+- Added DOWNLOAD_URL constant (Google Drive share URL) to site-data.ts and imported it across hero, navbar, pricing, download-cta, and footer.
+- Replaced the old 3-tier pricing (Free Trial / Premium ₹4,999 one-time / Multi-Outlet) with the user's actual 3 subscription plans: Monthly (₹99 / 30 days), Half-Yearly (₹499 / 180 days), Yearly (₹999 / 365 days, "Best Value" badge). Each plan lists: Full POS access, WhatsApp support, Priority support, 1 Store. CTA = "Buy Premium Plan" → opens the Google Drive installer.
+- Rewrote all "one-time / lifetime / 14-day free trial / pay once / no monthly fees" messaging across the site to match the subscription model:
+  - Hero badge → "Plans from ₹99/month · No lock-in"; trust badges → "Works offline / Full premium access / Plans from ₹99/mo".
+  - Hero + navbar Download buttons → "Download for Windows" linking to the real Google Drive URL (target=_blank).
+  - Pricing heading → "Pick a plan that fits your kitchen" with updated subtext.
+  - Download CTA: eyebrow "Get started today", bullets "Full premium POS software / Windows 7,10,11 / Plans from ₹99/month — no lock-in", main button → Google Drive; success state now includes a "Download installer now" button → Google Drive.
+  - Footer tagline → "plans from ₹99/month"; footer Download link → Google Drive.
+  - Updated 2 FAQs: "How do the plans and pricing work?" (explains 3 plans) and "How do I activate my plan?" (download + activate in-app/WhatsApp).
+  - Updated metadata description + stats ("₹99/mo Plans start at") + feature card "Flexible Plans".
+- Lint: 0 errors / 0 warnings.
+- Agent Browser verification: hero badge/trust badges updated, hero+navbar+pricing+download-cta buttons all point to the Google Drive URL, 3 plans render correctly (Monthly ₹99, Half-Yearly ₹499, Yearly ₹999 with Best Value badge), FAQ updated, lead-form success shows "Thank you!" + "Download installer now" → Google Drive. Zero runtime errors.
+- VLM check on pricing: "three plans visible… Yearly has Best Value badge… all plans list same features… no rendering issues."
+
+Stage Summary:
+- Real installer download link wired everywhere (hero, navbar, pricing CTAs, download CTA, footer, lead-success state).
+- Pricing now matches the user's actual subscription model exactly (₹99/₹499/₹999).
+- All messaging consistent with subscription billing; no stale one-time/lifetime/trial references remain.
+- Lint clean, zero errors, browser-verified, VLM-confirmed.

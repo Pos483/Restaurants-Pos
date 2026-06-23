@@ -22,7 +22,7 @@ const jakarta = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: "Siya Bill — Restaurant POS & Billing Software for Indian Restaurants",
   description:
-    "Siya Bill is a powerful offline Restaurant POS & billing desktop software. GST billing, UPI QR, thermal printer, Khata (Udhar) credit tracking, Kitchen Display, inventory, WhatsApp broadcasts & GST/P&L reports. One-time pricing, works offline.",
+    "Siya Bill is a powerful offline Restaurant POS & billing desktop software. GST billing, UPI QR, thermal printer, Khata (Udhar) credit tracking, Kitchen Display, inventory, WhatsApp broadcasts & GST/P&L reports. Flexible plans from ₹99/month, works offline.",
   keywords: [
     "restaurant billing software",
     "POS software India",

@@ -5,6 +5,7 @@ import { Menu, X, Download } from "lucide-react";
 import { Logo } from "./logo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { DOWNLOAD_URL } from "./site-data";
 
 const navLinks = [
   { label: "Features", href: "#features" },
@@ -70,7 +71,7 @@ export function Navbar() {
             asChild
             className="bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-warm hover:from-amber-600 hover:to-orange-700"
           >
-            <a href="#download">
+            <a href={DOWNLOAD_URL} target="_blank" rel="noopener noreferrer">
               <Download className="mr-1.5 h-4 w-4" />
               Download
             </a>
@@ -116,7 +117,7 @@ export function Navbar() {
               asChild
               className="bg-gradient-to-r from-amber-500 to-orange-600 text-white"
             >
-              <a href="#download" onClick={() => setOpen(false)}>
+              <a href={DOWNLOAD_URL} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)}>
                 <Download className="mr-1.5 h-4 w-4" />
                 Download
               </a>
