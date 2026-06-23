@@ -18,6 +18,12 @@ import {
 export const DOWNLOAD_URL =
   "https://drive.google.com/file/d/1kn_Okn-vHj-_2XxfBGfEhlS2ekr9Yr_R/view?usp=sharing";
 
+// Contact details
+export const PHONE_DISPLAY = "+91 86779 94666";
+export const PHONE_TEL = "+918677994666";
+export const WHATSAPP_URL =
+  "https://wa.me/918677994666?text=Hi%20Siya%20Bill%2C%20I%20want%20to%20buy%20a%20premium%20plan";
+
 export type Feature = {
   icon: LucideIcon;
   title: string;

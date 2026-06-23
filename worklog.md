@@ -95,3 +95,23 @@ Stage Summary:
 - Pricing now matches the user's actual subscription model exactly (₹99/₹499/₹999).
 - All messaging consistent with subscription billing; no stale one-time/lifetime/trial references remain.
 - Lint clean, zero errors, browser-verified, VLM-confirmed.
+
+---
+Task ID: 7
+Agent: Main (Z.ai Code)
+Task: Fix site not opening (dev server had stopped) and add the user's real mobile number 8677994666 across the marketing site.
+
+Work Log:
+- Diagnosed "site open nahi ho raha": the Next.js dev server process had been killed (port 3000 not listening, Caddy gateway returning HTTP 502). Restarted it persistently with `setsid` + `disown` so it survives shell exit; verified HTTP 200 on both :3000 and the :81 gateway.
+- Added contact constants to site-data.ts: PHONE_DISPLAY "+91 86779 94666", PHONE_TEL "+918677994666", WHATSAPP_URL with a pre-filled "I want to buy a premium plan" message.
+- Footer: replaced placeholder +91 90000 00000 with the real number — tel: link "+91 86779 94666" and a clickable WhatsApp link "WhatsApp: +91 86779 94666" (wa.me/918677994666).
+- Pricing section: added two contact CTAs below the plans — a green "Buy on WhatsApp · +91 86779 94666" button (opens WhatsApp with pre-filled message) and an outline "Call to buy" button (tel:+918677994666).
+- Download CTA: added a green WhatsApp line "Need help buying? WhatsApp us: +91 86779 94666" under the Download button.
+- Lint: 0 errors / 0 warnings.
+- Agent Browser verification (server alive HTTP 200 throughout): title renders, page fully renders, phone number present in body text, 5 phone/WhatsApp links present across footer + pricing + download CTA, footer shows "+91 86779 94666" and "WhatsApp: +91 86779 94666", pricing shows "Buy on WhatsApp · +91 86779 94666" + "Call to buy", download CTA shows the WhatsApp help line. Zero runtime errors.
+
+Stage Summary:
+- Site is now live and opening correctly (dev server restarted persistently).
+- Real mobile number 8677994666 added site-wide with both click-to-call and click-to-WhatsApp actions (footer, pricing, download CTA).
+- WhatsApp links pre-fill a "I want to buy a premium plan" message for faster conversions.
+- Lint clean, zero errors, browser-verified.

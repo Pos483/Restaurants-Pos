@@ -63,16 +63,21 @@ export function Footer() {
                 hello@siyabill.app
               </a>
               <a
-                href="tel:+919000000000"
+                href="tel:+918677994666"
                 className="flex items-center gap-2.5 text-stone-600 transition-colors hover:text-amber-600"
               >
                 <Phone className="h-4 w-4 text-amber-600" />
-                +91 90000 00000
+                +91 86779 94666
               </a>
-              <p className="flex items-center gap-2.5 text-stone-600">
+              <a
+                href="https://wa.me/918677994666"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2.5 text-stone-600 transition-colors hover:text-amber-600"
+              >
                 <MessageCircle className="h-4 w-4 text-amber-600" />
-                WhatsApp support available
-              </p>
+                WhatsApp: +91 86779 94666
+              </a>
               <p className="flex items-center gap-2.5 text-stone-600">
                 <MapPin className="h-4 w-4 text-amber-600" />
                 Made in India 🇮🇳
