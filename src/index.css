@@ -1,0 +1,529 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═══════════════════════════════════════════════════════════
+   🎨  SIYA BILL SYSTEM — PREMIUM DESIGN SYSTEM
+   ═══════════════════════════════════════════════════════════ */
+
+/* ─── Reset ─── */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Hide Chrome/Safari/Opera/Edge spinner buttons */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+/* Hide Firefox spinner buttons */
+input[type=number] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* ─── Root Variables ─── */
+:root {
+  --bg-primary: #F8FAFC;
+  --bg-secondary: #FFFFFF;
+  --bg-tertiary: #F1F5F9;
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #94A3B8;
+  --border-color: #E2E8F0;
+  --border-hover: #CBD5E1;
+  --accent-primary: #6366F1;
+  --accent-secondary: #F97316;
+  --surface-glass: rgba(255, 255, 255, 0.72);
+  --surface-glass-border: rgba(255, 255, 255, 0.5);
+  --shadow-color: rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04);
+  --input-bg: #FFFFFF;
+  --input-border: #E2E8F0;
+  --input-focus-border: #6366F1;
+  --input-focus-ring: rgba(99, 102, 241, 0.12);
+}
+
+.dark {
+  color-scheme: dark;
+  --bg-primary: #0B0F19;
+  --bg-secondary: #111827;
+  --bg-tertiary: #1E293B;
+  --text-primary: #F1F5F9;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+  --border-color: #1E293B;
+  --border-hover: #334155;
+  --accent-primary: #818CF8;
+  --accent-secondary: #FB923C;
+  --surface-glass: rgba(15, 23, 42, 0.75);
+  --surface-glass-border: rgba(255, 255, 255, 0.06);
+  --shadow-color: rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 4px 24px -4px rgba(0, 0, 0, 0.4), 0 2px 8px -2px rgba(0, 0, 0, 0.3);
+  --input-bg: #0F172A;
+  --input-border: #1E293B;
+  --input-focus-border: #F97316;
+  --input-focus-ring: rgba(249, 115, 22, 0.18);
+}
+
+.dark option {
+  background-color: #111827;
+  color: #F1F5F9;
+}
+
+/* ─── Body ─── */
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  overflow: hidden;
+  transition: background-color 0.35s ease, color 0.35s ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   📜  PREMIUM SCROLLBARS
+   ═══════════════════════════════════════════════════════════ */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #1E293B;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   🪟  GLASSMORPHISM COMPONENTS
+   ═══════════════════════════════════════════════════════════ */
+
+/* Glass Card — semi-transparent */
+.glass-card {
+  background: var(--surface-glass);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--surface-glass-border);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Glass Card Solid — more opaque, for content areas */
+.glass-card-solid {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.dark .glass-card-solid {
+  background: rgba(15, 23, 42, 0.85);
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+/* Glass Sidebar — frosted vertical nav */
+.glass-sidebar {
+  background: rgba(255, 255, 255, 0.85);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border-right: 1px solid rgba(226, 232, 240, 0.6);
+  box-shadow: 1px 0 24px -8px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.dark .glass-sidebar {
+  background: rgba(11, 15, 25, 0.92);
+  border-right: 1px solid rgba(255, 255, 255, 0.04);
+  box-shadow: 1px 0 24px -8px rgba(0, 0, 0, 0.5), inset -1px 0 0 rgba(255, 255, 255, 0.02);
+}
+
+/* Glass Header — frosted top bar */
+.glass-header {
+  background: rgba(255, 255, 255, 0.82);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.5);
+  box-shadow: 0 1px 16px -4px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.dark .glass-header {
+  background: rgba(11, 15, 25, 0.88);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  box-shadow: 0 1px 24px -4px rgba(0, 0, 0, 0.4), inset 0 -1px 0 rgba(255, 255, 255, 0.02);
+}
+
+/* Glass Modal — dialog backdrop */
+.glass-modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 24px 80px -12px rgba(0, 0, 0, 0.15), 0 8px 24px -8px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.dark .glass-modal {
+  background: rgba(15, 23, 42, 0.96);
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 24px 80px -12px rgba(0, 0, 0, 0.6), 0 8px 24px -8px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   ✨  GLOW & SHADOW EFFECTS
+   ═══════════════════════════════════════════════════════════ */
+
+/* Orange glow — for sidebar icon, brand elements */
+.glow-orange {
+  box-shadow: 0 0 20px -4px rgba(249, 115, 22, 0.3), 0 4px 12px -2px rgba(249, 115, 22, 0.15);
+}
+.dark .glow-orange {
+  box-shadow: 0 0 28px -4px rgba(249, 115, 22, 0.45), 0 4px 16px -2px rgba(249, 115, 22, 0.25);
+}
+
+.glow-shadow-orange {
+  box-shadow: 0 0 15px -3px rgba(249, 115, 22, 0.15), 0 0 6px -2px rgba(249, 115, 22, 0.1);
+}
+.dark .glow-shadow-orange {
+  box-shadow: 0 0 20px -3px rgba(249, 115, 22, 0.3), 0 0 8px -2px rgba(249, 115, 22, 0.2);
+}
+
+/* Indigo glow */
+.glow-indigo {
+  box-shadow: 0 0 20px -4px rgba(99, 102, 241, 0.3), 0 4px 12px -2px rgba(99, 102, 241, 0.15);
+}
+.dark .glow-indigo {
+  box-shadow: 0 0 28px -4px rgba(129, 140, 248, 0.45), 0 4px 16px -2px rgba(129, 140, 248, 0.25);
+}
+
+.glow-shadow-indigo {
+  box-shadow: 0 0 15px -3px rgba(99, 102, 241, 0.15), 0 0 6px -2px rgba(99, 102, 241, 0.1);
+}
+.dark .glow-shadow-indigo {
+  box-shadow: 0 0 20px -3px rgba(34, 211, 238, 0.3), 0 0 8px -2px rgba(34, 211, 238, 0.2);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   🎭  HOVER & ANIMATION UTILITIES
+   ═══════════════════════════════════════════════════════════ */
+
+/* Lift on hover — for cards, stat tiles */
+.hover-lift {
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px -8px rgba(0, 0, 0, 0.12);
+}
+.dark .hover-lift:hover {
+  box-shadow: 0 8px 32px -8px rgba(0, 0, 0, 0.5);
+}
+
+/* Smooth theme transitions */
+.theme-transition {
+  transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+              color 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+              box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Subtle pulse for live indicators */
+@keyframes subtlePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+.animate-subtle-pulse {
+  animation: subtlePulse 2s ease-in-out infinite;
+}
+
+/* Custom Animation Duration Utilities */
+.animate-duration-2s {
+  animation-duration: 2s !important;
+}
+.animate-duration-4s {
+  animation-duration: 4s !important;
+}
+.animate-duration-6s {
+  animation-duration: 6s !important;
+}
+
+
+/* Disable native up/down spinner buttons on number inputs globally */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.input-premium, 
+input[type="text"], 
+input[type="number"], 
+input[type="password"], 
+input[type="email"], 
+input[type="search"], 
+input[type="tel"], 
+input[type="date"], 
+textarea, 
+select {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+  border-radius: 0.75rem;
+  border: 1.5px solid var(--input-border);
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.input-premium::placeholder,
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.input-premium:hover, 
+input[type="text"]:hover, 
+input[type="number"]:hover, 
+input[type="password"]:hover, 
+input[type="email"]:hover, 
+input[type="search"]:hover, 
+input[type="tel"]:hover, 
+input[type="date"]:hover, 
+textarea:hover, 
+select:hover {
+  border-color: var(--border-hover);
+}
+
+.input-premium:focus, 
+input[type="text"]:focus, 
+input[type="number"]:focus, 
+input[type="password"]:focus, 
+input[type="email"]:focus, 
+input[type="search"]:focus, 
+input[type="tel"]:focus, 
+input[type="date"]:focus, 
+textarea:focus, 
+select:focus {
+  border-color: var(--input-focus-border);
+  box-shadow: 0 0 0 3px var(--input-focus-ring), 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Dark mode specific enhancements for inputs */
+.dark .input-premium, 
+.dark input[type="text"], 
+.dark input[type="number"], 
+.dark input[type="password"], 
+.dark input[type="email"], 
+.dark input[type="search"], 
+.dark input[type="tel"], 
+.dark input[type="date"], 
+.dark textarea, 
+.dark select {
+  border-color: rgba(255, 255, 255, 0.08);
+  background-color: rgba(15, 23, 42, 0.8);
+  color: #F1F5F9;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.dark .input-premium:hover,
+.dark input[type="text"]:hover, 
+.dark input[type="number"]:hover, 
+.dark input[type="password"]:hover, 
+.dark input[type="email"]:hover, 
+.dark input[type="search"]:hover, 
+.dark input[type="tel"]:hover, 
+.dark input[type="date"]:hover, 
+.dark textarea:hover, 
+.dark select:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  background-color: rgba(15, 23, 42, 0.9);
+}
+
+.dark .input-premium:focus, 
+.dark input[type="text"]:focus, 
+.dark input[type="number"]:focus, 
+.dark input[type="password"]:focus, 
+.dark input[type="email"]:focus, 
+.dark input[type="search"]:focus, 
+.dark input[type="tel"]:focus, 
+.dark input[type="date"]:focus, 
+.dark textarea:focus, 
+.dark select:focus {
+  border-color: var(--input-focus-border);
+  box-shadow: 0 0 0 3px var(--input-focus-ring), inset 0 1px 2px rgba(0, 0, 0, 0.15);
+  background-color: rgba(15, 23, 42, 1);
+}
+
+/* Select dropdown arrow for dark mode */
+.dark select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2.25rem;
+}
+
+/* Date input icon color fix for dark mode */
+.dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   🔘  PREMIUM BUTTONS (layered onto Tailwind)
+   ═══════════════════════════════════════════════════════════ */
+
+button {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   📊  TABLE STYLES
+   ═══════════════════════════════════════════════════════════ */
+
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+thead th {
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   🎨  SELECTION & ACCENT COLORS
+   ═══════════════════════════════════════════════════════════ */
+
+::selection {
+  background: rgba(99, 102, 241, 0.2);
+  color: inherit;
+}
+.dark ::selection {
+  background: rgba(249, 115, 22, 0.25);
+  color: inherit;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   📱  SMOOTH SPRING ANIMATIONS
+   ═══════════════════════════════════════════════════════════ */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fadeInUp {
+  animation: fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease both;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease both;
+}
+
+.animate-scaleIn {
+  animation: scaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes shrink {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+.animate-shrink {
+  animation: shrink 4s linear forwards;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   🚫  UTILITY: HIDE SCROLLBAR
+   ═══════════════════════════════════════════════════════════ */
+
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE & Edge legacy */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera, Edge (Chromium), Samsung Internet */
+}
+
+/* Date input width for stock report filter */
+.report-date-input {
+  width: 150px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   🖨️  PRINT STYLES
+   ═══════════════════════════════════════════════════════════ */
+
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .glass-sidebar,
+  .glass-header {
+    display: none !important;
+  }
+}
