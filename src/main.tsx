@@ -5,6 +5,7 @@ import './index.css'
 import { AppProvider } from './contexts/AppContext'
 import { ToastProvider } from './components/Toast'
 import { ThemeProvider } from './contexts/ThemeContext'
+import { Analytics } from '@vercel/analytics/react'
 
 if (typeof window !== 'undefined' && window.location.search.includes('clear=true')) {
   window.indexedDB.deleteDatabase('RestaurantPOS_v3');
@@ -104,6 +105,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <AppProvider>
         <ToastProvider>
           <App />
+          <Analytics />
         </ToastProvider>
       </AppProvider>
     </ThemeProvider>
