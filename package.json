@@ -15,7 +15,11 @@
     "electron:start": "electron .",
     "electron:dev": "concurrently -k \"cross-env BROWSER=none vite\" \"wait-on http://localhost:5173 && electron .\"",
     "electron:build": "npm run build && electron-builder",
-    "diagnostics": "node system_diagnostics_bot.js"
+    "diagnostics": "node system_diagnostics_bot.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",
@@ -37,19 +41,25 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
+    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/ui": "^4.1.10",
     "autoprefixer": "^10.4.19",
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
     "electron": "^30.0.0",
     "electron-builder": "^26.8.1",
+    "jsdom": "^29.1.1",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
     "typescript": "^5.2.2",
     "vite": "^5.2.0",
+    "vitest": "^4.1.10",
     "wait-on": "^7.2.0"
   },
   "build": {
@@ -65,7 +75,7 @@
     "directories": {
       "output": "release"
     },
-    "asar": false,
+    "asar": true,
     "win": {
       "target": [
         "nsis"

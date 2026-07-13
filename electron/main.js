@@ -195,18 +195,21 @@ app.whenReady().then(() => {
       const url = new URL(request.url);
       let filePath = path.join(__dirname, '..', 'dist', url.pathname);
       filePath = path.normalize(filePath);
-      
+
       // Prevent directory traversal attacks
       const distPath = path.normalize(path.join(__dirname, '..', 'dist'));
       if (!filePath.startsWith(distPath)) {
         return new Response('Access Denied', { status: 403 });
       }
 
-      if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-        filePath = path.join(__dirname, '..', 'dist', 'index.html');
-      }
-
-      return net.fetch(`file://${filePath}`);
+      // NOTE: When asar: true, dist/ files are inside the asar archive.
+      // fs.existsSync / fs.statSync do NOT work reliably on asar-packed files.
+      // Instead we attempt to serve the requested file; on failure (e.g. directory
+      // or missing asset), we fall back to index.html for SPA client-side routing.
+      return net.fetch(`file://${filePath}`).catch(() => {
+        const indexPath = path.join(__dirname, '..', 'dist', 'index.html');
+        return net.fetch(`file://${indexPath}`);
+      });
     } catch (err) {
       log.error('[Protocol Handle] Error:', err);
       return new Response('Internal Server Error', { status: 500 });
