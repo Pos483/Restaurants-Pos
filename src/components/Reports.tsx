@@ -37,6 +37,8 @@ import { escapeHtml } from '../utils/escapeHtml';
 export default function Reports() {
   const [billsPage, setBillsPage] = useState(1);
   const [dailyPage, setDailyPage] = useState(1);
+  const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
+  const [hoveredHour, setHoveredHour] = useState<string | null>(null);
 
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
@@ -95,9 +97,9 @@ export default function Reports() {
 
   // Add Expense form states
   const [showAddExpense, setShowAddExpense] = useState(false);
-  const [expAmount, setExpAmount] = useState('');
-  const [expMethod, setExpMethod] = useState('Cash');
-  const [expNote, setExpNote] = useState('');
+  const [expenseRows, setExpenseRows] = useState<{ amount: string; paymentMethod: string; note: string }[]>([
+    { amount: '', paymentMethod: 'Cash', note: '' }
+  ]);
   const [expDate, setExpDate] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -127,13 +129,14 @@ export default function Reports() {
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
-    const amount = parseFloat(expAmount);
-    if (isNaN(amount) || amount <= 0) {
-      showToast('Please enter a valid expense amount!', 'error');
-      return;
-    }
-    if (!expNote.trim()) {
-      showToast('Please enter a description or note!', 'error');
+    
+    const validRows = expenseRows.filter(r => {
+      const amt = parseFloat(r.amount);
+      return !isNaN(amt) && amt > 0 && r.note.trim().length > 0;
+    });
+
+    if (validRows.length === 0) {
+      showToast('Please fill in at least one valid expense row with amount and description!', 'error');
       return;
     }
 
@@ -148,23 +151,24 @@ export default function Reports() {
     }
 
     try {
-      await db.expenses.add({
-        id: crypto.randomUUID(),
-        amount,
-        category: 'Others',
-        paymentMethod: expMethod,
-        note: expNote.trim(),
-        timestamp: timestamp
-      });
-      showToast('Expense successfully logged!');
+      for (const row of validRows) {
+        await db.expenses.add({
+          id: crypto.randomUUID(),
+          amount: parseFloat(row.amount),
+          category: 'Others',
+          paymentMethod: row.paymentMethod,
+          note: row.note.trim(),
+          timestamp: timestamp
+        });
+      }
+      showToast(`${validRows.length} expense(s) successfully logged!`);
       setShowAddExpense(false);
-      setExpAmount('');
-      setExpNote('');
+      setExpenseRows([{ amount: '', paymentMethod: 'Cash', note: '' }]);
       const d = new Date();
       setExpDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
     } catch (err) {
       console.error(err);
-      showToast('Failed to save expense. Please try again.', 'error');
+      showToast('Failed to save expenses. Please try again.', 'error');
     }
   };
 
@@ -270,7 +274,7 @@ export default function Reports() {
   };
 
   const backendStats = useMemo(() => {
-    if (!bills) return { totalSales: 0, totalOrders: 0, totalTax: 0, subTotal: 0, totalDiscount: 0, totalUnpaid: 0, paymentStats: {}, dailyStats: {}, hourlyStats: {}, itemStats: {}, weekdayStats: [] };
+    if (!bills) return { totalSales: 0, totalOrders: 0, totalTax: 0, subTotal: 0, totalDiscount: 0, totalUnpaid: 0, paymentStats: {}, dailyStats: {}, hourlyStats: {}, itemStats: {}, weekdayStats: [], categoryStats: {} };
 
     const rangeBills = bills;
 
@@ -285,6 +289,7 @@ export default function Reports() {
     const dailyStats: Record<string, any> = {};
     const hourlyStats: Record<string, any> = {};
     const itemStats: Record<string, { qty: number; revenue: number; category: string }> = {};
+    const categoryStats: Record<string, { qty: number; revenue: number }> = {};
 
     // Count occurrences of each weekday in the selected range to get an accurate average
     const weekdayCounts = [0, 0, 0, 0, 0, 0, 0]; // 0 = Sunday, 1 = Monday...
@@ -352,7 +357,7 @@ export default function Reports() {
       }
 
       const dateStr = formatDate(b.timestamp);
-      if (!dailyStats[dateStr]) dailyStats[dateStr] = { orders: 0, subtotal: 0, discount: 0, tax: 0, sales: 0 };
+      if (!dailyStats[dateStr]) dailyStats[dateStr] = { orders: 0, subtotal: 0, discount: 0, tax: 0, sales: 0, timestamp: b.timestamp };
       dailyStats[dateStr].orders += 1;
       dailyStats[dateStr].subtotal += b.subtotal;
       dailyStats[dateStr].discount += b.discount || 0;
@@ -390,6 +395,12 @@ export default function Reports() {
         if (!itemStats[name]) itemStats[name] = { qty: 0, revenue: 0, category };
         itemStats[name].qty += item.quantity;
         itemStats[name].revenue += (price * item.quantity);
+
+        if (!categoryStats[category]) {
+          categoryStats[category] = { qty: 0, revenue: 0 };
+        }
+        categoryStats[category].qty += item.quantity;
+        categoryStats[category].revenue += (price * item.quantity);
       }
     }
     
@@ -404,7 +415,8 @@ export default function Reports() {
       dailyStats, 
       hourlyStats, 
       itemStats,
-      weekdayStats: Object.values(weekdayStats)
+      weekdayStats: Object.values(weekdayStats),
+      categoryStats
     };
   }, [bills, startDate, endDate]);
 
@@ -422,6 +434,13 @@ export default function Reports() {
   const hourlyStats = backendStats?.hourlyStats || {};
   const itemStats = backendStats?.itemStats || {};
   const weekdayStats = backendStats?.weekdayStats || [];
+  const categoryStats = backendStats?.categoryStats || {};
+
+  const sortedCategories = useMemo(() => {
+    return Object.entries(categoryStats)
+      .map(([name, data]: any) => ({ name, ...data }))
+      .sort((a, b) => b.revenue - a.revenue);
+  }, [categoryStats]);
 
   const topItems = Object.entries(itemStats)
     .map(([name, data]: any) => ({ name, ...data }))
@@ -522,6 +541,11 @@ export default function Reports() {
       csvContent += "Item Name,Category,Quantity Sold,Revenue\n";
       topItems.forEach(item => {
         csvContent += `"${item.name}","${item.category}",${item.qty},${item.revenue}\n`;
+      });
+    } else if (activeTab === 'categories') {
+      csvContent += "Category Name,Quantity Sold,Revenue\n";
+      sortedCategories.forEach(cat => {
+        csvContent += `"${cat.name}",${cat.qty},${cat.revenue}\n`;
       });
     } else if (activeTab === 'hourly') {
       csvContent += "Hour,Orders,Revenue\n";
@@ -629,6 +653,9 @@ export default function Reports() {
       } else if (activeTab === 'items') {
         const body = topItems.map((item: any) => [ item.name, item.category, item.qty.toString(), `Rs. ${item.revenue.toFixed(2)}` ]) as string[][];
         autoTable(doc, { head: [['Item Name', 'Category', 'Qty Sold', 'Revenue']], body, startY: 30, ...styles });
+      } else if (activeTab === 'categories') {
+        const body = sortedCategories.map((cat: any) => [ cat.name, cat.qty.toString(), `Rs. ${cat.revenue.toFixed(2)}` ]) as string[][];
+        autoTable(doc, { head: [['Category Name', 'Qty Sold', 'Revenue']], body, startY: 30, ...styles });
       } else if (activeTab === 'hourly') {
         const body = Object.entries(hourlyStats).sort((a, b) => a[0].localeCompare(b[0])).map(([hour, stats]: any) => [
             hour, stats.orders.toString(), `Rs. ${stats.sales.toFixed(2)}`
@@ -680,6 +707,7 @@ export default function Reports() {
     { id: 'expenses', label: 'Expenses', icon: <Wallet size={15} /> },
     { id: 'daily', label: 'Daily', icon: <CalendarDays size={15} /> },
     { id: 'hourly', label: 'Hourly', icon: <Clock size={15} /> },
+    { id: 'categories', label: 'Categories', icon: <Layers size={15} /> },
     { id: 'items', label: 'Items', icon: <Layers size={15} /> },
     { id: 'bills', label: 'Bills', icon: <Receipt size={15} /> },
   ];
@@ -690,22 +718,65 @@ export default function Reports() {
       {/* ── HEADER BAR ── */}
       <div className="shrink-0 flex flex-col gap-3">
 
-        {/* Row 1: Title + Downloads */}
-        <div className="flex items-center justify-between flex-wrap gap-y-2">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-200">
-              <BarChart3 size={20} className="text-white" />
+        {/* Row 1: Title + Filters + Downloads */}
+        <div className="flex items-center justify-between flex-wrap lg:flex-nowrap gap-3 pb-3 border-b border-gray-100 dark:border-slate-800/80">
+          <div className="flex items-center gap-3.5 flex-wrap sm:flex-nowrap">
+            <div className="flex items-center gap-2.5 shrink-0">
+              <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-200">
+                <BarChart3 size={20} className="text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl font-black text-gray-900 dark:text-slate-100 tracking-tight">Reports & Analytics</h1>
+                <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 -mt-0.5">{startDate === endDate ? formatDateStr(startDate) : `${formatDateStr(startDate)} — ${formatDateStr(endDate)}`}</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-black text-gray-900 dark:text-slate-100 tracking-tight">Reports & Analytics</h1>
-              <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 -mt-0.5">{startDate === endDate ? formatDateStr(startDate) : `${formatDateStr(startDate)} — ${formatDateStr(endDate)}`}</p>
-            </div>
+
+            {/* Quick filters dropdown */}
+            <select
+              value={dateFilter}
+              onChange={(e) => handleDateFilterChange(e.target.value)}
+              title="Select Date Range"
+              className="px-3 py-2 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-200 border border-gray-200 dark:border-slate-700 rounded-xl font-bold text-xs focus:outline-none focus:border-purple-500 cursor-pointer shadow-sm w-32 shrink-0 animate-in fade-in duration-200"
+            >
+              {quickFilters.map(f => (
+                <option key={f.id} value={f.id}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+
+            {/* Date pickers (conditional: only if dateFilter is 'custom') */}
+            {dateFilter === 'custom' && (
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 px-3 py-2 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm shrink-0 animate-in slide-in-from-left duration-250">
+                <Calendar size={12} className="text-purple-400" />
+                <input 
+                  type="date" 
+                  value={startDate} 
+                  onChange={(e) => { setStartDate(e.target.value); setDateFilter('custom'); }}
+                  title="Start Date"
+                  placeholder="YYYY-MM-DD"
+                  aria-label="Start Date"
+                  className="bg-transparent font-bold text-gray-700 dark:text-slate-200 focus:outline-none text-[10px] w-[95px]" 
+                />
+                <span className="text-gray-300 dark:text-slate-600 text-[10px] font-bold">→</span>
+                <input 
+                  type="date" 
+                  value={endDate} 
+                  onChange={(e) => { setEndDate(e.target.value); setDateFilter('custom'); }}
+                  title="End Date"
+                  placeholder="YYYY-MM-DD"
+                  aria-label="End Date"
+                  className="bg-transparent font-bold text-gray-700 dark:text-slate-200 focus:outline-none text-[10px] w-[95px]" 
+                />
+              </div>
+            )}
           </div>
+
           <div className="flex items-center gap-1.5 shrink-0">
             <button 
               onClick={downloadGSTExcel} 
               disabled={isExportDisabled}
-              className="px-3 py-2.5 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl font-bold text-xs min-h-[40px] flex items-center gap-1.5 transition-all border border-transparent hover:border-emerald-200 disabled:opacity-50 disabled:pointer-events-none dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-emerald-400" 
+              className="px-3 py-2 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl font-bold text-xs min-h-[36px] flex items-center gap-1.5 transition-all border border-transparent hover:border-emerald-200 disabled:opacity-50 disabled:pointer-events-none dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-emerald-400" 
               title="Download GST Report"
             >
               <Download size={13} /> GST
@@ -713,7 +784,7 @@ export default function Reports() {
             <button 
               onClick={downloadPnLExcel} 
               disabled={isExportDisabled}
-              className="px-3 py-2.5 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl font-bold text-xs min-h-[40px] flex items-center gap-1.5 transition-all border border-transparent hover:border-emerald-200 disabled:opacity-50 disabled:pointer-events-none dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-emerald-400" 
+              className="px-3 py-2 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl font-bold text-xs min-h-[36px] flex items-center gap-1.5 transition-all border border-transparent hover:border-emerald-200 disabled:opacity-50 disabled:pointer-events-none dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-emerald-400" 
               title="Download P&L Report"
             >
               <Download size={13} /> P&L
@@ -721,59 +792,17 @@ export default function Reports() {
             <button 
               onClick={downloadCSV} 
               disabled={isExportDisabled}
-              className="px-3 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs min-h-[40px] flex items-center gap-1.5 transition-all shadow-sm shadow-emerald-200 disabled:opacity-50 disabled:pointer-events-none dark:bg-emerald-700 dark:hover:bg-emerald-600"
+              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs min-h-[36px] flex items-center gap-1.5 transition-all shadow-sm shadow-emerald-200 disabled:opacity-50 disabled:pointer-events-none dark:bg-emerald-700 dark:hover:bg-emerald-600"
             >
               <Download size={13} /> CSV
             </button>
             <button 
               onClick={downloadPDF} 
               disabled={isExportDisabled}
-              className="px-3 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl font-bold text-xs min-h-[40px] flex items-center gap-1.5 transition-all shadow-sm shadow-purple-200 disabled:opacity-50 disabled:pointer-events-none dark:from-purple-700 dark:to-indigo-700"
+              className="px-3 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl font-bold text-xs min-h-[36px] flex items-center gap-1.5 transition-all shadow-sm shadow-purple-200 disabled:opacity-50 disabled:pointer-events-none dark:from-purple-700 dark:to-indigo-700"
             >
               <FileText size={13} /> PDF
             </button>
-          </div>
-        </div>
-
-        {/* Row 2: Quick Filters + Date Pickers */}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          {/* Quick filters */}
-          <div className="overflow-x-auto scrollbar-hide">
-            <div className="flex items-center gap-1 bg-gray-100/80 dark:bg-slate-900/30 p-1 rounded-xl w-fit">
-              {quickFilters.map(f => (
-                <button
-                  key={f.id}
-                  onClick={() => handleDateFilterChange(f.id)}
-                  className={`shrink-0 px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${dateFilter === f.id ? 'bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-300'}`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Date pickers */}
-          <div className="flex items-center gap-2 bg-white dark:bg-slate-800 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm w-fit shrink-0">
-            <Calendar size={14} className="text-purple-400" />
-            <input 
-              type="date" 
-              value={startDate} 
-              onChange={(e) => { setStartDate(e.target.value); setDateFilter('custom'); }}
-              title="Start Date"
-              placeholder="YYYY-MM-DD"
-              aria-label="Start Date"
-              className="bg-transparent font-bold text-gray-700 dark:text-slate-200 focus:outline-none text-xs w-[110px]" 
-            />
-            <span className="text-gray-300 dark:text-slate-600 text-xs font-bold">→</span>
-            <input 
-              type="date" 
-              value={endDate} 
-              onChange={(e) => { setEndDate(e.target.value); setDateFilter('custom'); }}
-              title="End Date"
-              placeholder="YYYY-MM-DD"
-              aria-label="End Date"
-              className="bg-transparent font-bold text-gray-700 dark:text-slate-200 focus:outline-none text-xs w-[110px]" 
-            />
           </div>
         </div>
 
@@ -900,9 +929,9 @@ export default function Reports() {
                 </div>
                 <button 
                   onClick={() => setShowAddExpense(true)}
-                  className="py-3 px-5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-2xl font-black text-xs shadow-md flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-purple-100 dark:shadow-none animate-bounce"
+                  className="py-3 px-5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-2xl font-black text-xs shadow-md flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-purple-100 dark:shadow-none"
                 >
-                  <Plus size={15} /> Log Expense
+                  <Plus size={15} /> Log Expenses (Bulk)
                 </button>
               </div>
 
@@ -979,75 +1008,129 @@ export default function Reports() {
         {/* Add Expense Modal Popup */}
         {showAddExpense && (
           <div className="fixed inset-0 bg-black/45 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="glass-modal bg-white rounded-3xl p-6 shadow-2xl w-full max-w-sm border border-gray-100 dark:bg-slate-900/95 dark:border-slate-800 flex flex-col gap-4 animate-in scale-in duration-200">
-              <h3 className="font-black text-xl text-gray-800 dark:text-slate-100">Log New Expense</h3>
+            <div className="glass-modal bg-white rounded-3xl p-6 shadow-2xl w-full max-w-lg border border-gray-100 dark:bg-slate-900/95 dark:border-slate-800 flex flex-col gap-4 animate-in scale-in duration-200">
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-2.5">
+                <h3 className="font-black text-lg text-gray-800 dark:text-slate-100">Log Expenses (bulk add)</h3>
+                <span className="text-xs font-bold text-gray-400 dark:text-slate-500">{expenseRows.length} Row(s)</span>
+              </div>
+              
               <form onSubmit={handleAddExpense} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="expense-date-input" className="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-wide">Expense Date</label>
+                {/* Date Picker */}
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="expense-date-input" className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-wide">Expense Date</label>
                   <input 
                     id="expense-date-input"
                     type="date" 
                     value={expDate}
                     onChange={e => setExpDate(e.target.value)}
                     title="Expense Date"
-                    className="p-3 bg-gray-50/60 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl text-sm font-black text-gray-800 dark:text-slate-100 focus:outline-none focus:border-purple-500"
+                    className="p-2.5 bg-gray-50/60 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-black text-gray-800 dark:text-slate-100 focus:outline-none focus:border-purple-500 w-fit"
                     required
                   />
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="expense-amount-input" className="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-wide">Expense Amount (₹)</label>
-                  <input 
-                    id="expense-amount-input"
-                    type="number" 
-                    step="any"
-                    value={expAmount}
-                    onChange={e => setExpAmount(e.target.value)}
-                    placeholder="0.00"
-                    title="Expense Amount"
-                    className="p-3 bg-gray-50/60 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl text-sm font-black text-gray-800 dark:text-slate-100 focus:outline-none focus:border-purple-500"
-                    required
-                  />
+
+                {/* Scrollable Rows Container */}
+                <div className="flex flex-col gap-3 max-h-[50vh] overflow-y-auto pr-1 scrollbar-thin">
+                  {expenseRows.map((row, idx) => (
+                    <div key={idx} className="flex items-end gap-2.5 p-3 bg-gray-50/30 dark:bg-slate-800/30 border border-gray-100 dark:border-slate-800/60 rounded-2xl relative group animate-in slide-in-from-bottom-2 duration-150">
+                      
+                      {/* Description */}
+                      <div className="flex-1 flex flex-col gap-1">
+                        <label className="text-[9px] font-black text-gray-400 dark:text-slate-500 uppercase">Description / Note</label>
+                        <input 
+                          type="text" 
+                          value={row.note}
+                          onChange={e => {
+                            const newRows = [...expenseRows];
+                            newRows[idx].note = e.target.value;
+                            setExpenseRows(newRows);
+                          }}
+                          placeholder="e.g. Salaries, Milk, Rent"
+                          className="p-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-gray-800 dark:text-slate-200 focus:outline-none focus:border-purple-500 w-full"
+                          required
+                        />
+                      </div>
+
+                      {/* Amount */}
+                      <div className="w-24 flex flex-col gap-1">
+                        <label className="text-[9px] font-black text-gray-400 dark:text-slate-500 uppercase">Amount (₹)</label>
+                        <input 
+                          type="number" 
+                          step="any"
+                          value={row.amount}
+                          onChange={e => {
+                            const newRows = [...expenseRows];
+                            newRows[idx].amount = e.target.value;
+                            setExpenseRows(newRows);
+                          }}
+                          placeholder="0.00"
+                          className="p-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-black text-gray-800 dark:text-slate-100 focus:outline-none focus:border-purple-500 w-full"
+                          required
+                        />
+                      </div>
+
+                      {/* Payment Method */}
+                      <div className="w-28 flex flex-col gap-1">
+                        <label className="text-[9px] font-black text-gray-400 dark:text-slate-500 uppercase">Method</label>
+                        <select 
+                          value={row.paymentMethod}
+                          onChange={e => {
+                            const newRows = [...expenseRows];
+                            newRows[idx].paymentMethod = e.target.value;
+                            setExpenseRows(newRows);
+                          }}
+                          title="Payment Method"
+                          className="p-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-bold text-gray-800 dark:text-slate-200 focus:outline-none focus:border-purple-500 cursor-pointer"
+                        >
+                          <option value="Cash">💵 Cash</option>
+                          <option value="UPI">📱 UPI</option>
+                          <option value="Card">💳 Card</option>
+                        </select>
+                      </div>
+
+                      {/* Delete button */}
+                      {expenseRows.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExpenseRows(expenseRows.filter((_, i) => i !== idx));
+                          }}
+                          title="Remove Row"
+                          className="p-2 text-red-500 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/20 rounded-xl transition-all"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="payment-method-select" className="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-wide">Payment Out Method</label>
-                  <select 
-                    id="payment-method-select"
-                    title="Payment Out Method"
-                    value={expMethod}
-                    onChange={e => setExpMethod(e.target.value)}
-                    className="p-3 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl text-sm font-black text-gray-800 dark:text-slate-100 focus:outline-none cursor-pointer focus:border-purple-500"
-                  >
-                    <option value="Cash">💵 Cash Drawer</option>
-                    <option value="UPI">📱 UPI Payment</option>
-                    <option value="Card">💳 Credit/Debit Card</option>
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="expense-note-input" className="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-wide">Note / Description</label>
-                  <input 
-                    id="expense-note-input"
-                    type="text" 
-                    value={expNote}
-                    onChange={e => setExpNote(e.target.value)}
-                    placeholder="e.g. Salaries, UPI, guddu sailri may"
-                    title="Note / Description"
-                    className="p-3 bg-gray-50/60 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl text-sm font-bold text-gray-800 dark:text-slate-200 focus:outline-none focus:border-purple-500"
-                    required
-                  />
-                </div>
-                <div className="flex gap-3.5 mt-2.5">
+
+                {/* Add Row Button */}
+                <button
+                  type="button"
+                  onClick={() => setExpenseRows([...expenseRows, { amount: '', paymentMethod: 'Cash', note: '' }])}
+                  className="py-2 px-3 self-start border border-dashed border-purple-300 dark:border-purple-900/60 hover:bg-purple-50/50 dark:hover:bg-purple-950/10 text-purple-600 dark:text-purple-400 rounded-2xl text-xs font-black flex items-center gap-1.5 transition-all active:scale-95"
+                >
+                  <Plus size={14} /> Add Row (और खर्च जोड़ें)
+                </button>
+
+                {/* Footer Buttons */}
+                <div className="flex gap-3.5 mt-2 pt-3 border-t border-gray-100 dark:border-slate-800">
                   <button 
                     type="button"
-                    onClick={() => setShowAddExpense(false)}
-                    className="flex-1 py-3 bg-gray-50 hover:bg-gray-100 border border-gray-200/50 dark:bg-slate-800 dark:hover:bg-slate-700 dark:border-slate-700 rounded-2xl font-bold text-sm text-gray-600 dark:text-slate-300 cursor-pointer active:scale-95"
+                    onClick={() => {
+                      setShowAddExpense(false);
+                      setExpenseRows([{ amount: '', paymentMethod: 'Cash', note: '' }]);
+                    }}
+                    className="flex-1 py-2.5 bg-gray-50 hover:bg-gray-100 border border-gray-200/50 dark:bg-slate-800 dark:hover:bg-slate-700 dark:border-slate-700 rounded-2xl font-bold text-xs text-gray-600 dark:text-slate-300 cursor-pointer active:scale-95"
                   >
                     Cancel
                   </button>
                   <button 
                     type="submit"
-                    className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-2xl font-bold text-sm shadow-md shadow-purple-100 dark:shadow-none cursor-pointer active:scale-95"
+                    className="flex-1 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-2xl font-black text-xs shadow-md shadow-purple-100 dark:shadow-none cursor-pointer active:scale-95"
                   >
-                    Save Expense
+                    Save All Expenses (सुरक्षित करें)
                   </button>
                 </div>
               </form>
@@ -1426,7 +1509,7 @@ export default function Reports() {
 
         {/* ═══ TAB: HOURLY ═══ */}
         {activeTab === 'hourly' && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 dark:bg-slate-900 dark:border-slate-800 flex flex-col flex-1 overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 dark:bg-slate-900 dark:border-slate-800 flex flex-col flex-1 overflow-hidden animate-in fade-in duration-200">
             <div className="px-5 py-3.5 border-b border-gray-100 dark:border-slate-800 bg-gradient-to-r from-gray-50 to-white dark:from-slate-800 dark:to-slate-900 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 bg-orange-100 dark:bg-orange-900/30 rounded-lg"><Clock size={14} className="text-orange-600 dark:text-orange-400" /></div>
@@ -1434,42 +1517,404 @@ export default function Reports() {
               </div>
               <span className="text-xs font-bold text-gray-400 dark:text-slate-500">{Object.keys(hourlyStats).length} active hour(s)</span>
             </div>
-            <div className="flex-1 overflow-auto p-5">
+            
+            <div className="flex-1 overflow-auto p-6">
               {Object.keys(hourlyStats).length === 0 ? (
                 <div className="h-full flex items-center justify-center text-gray-400 dark:text-slate-500 font-semibold">No hourly data available.</div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {Object.entries(hourlyStats)
-                    .sort((a, b) => a[0].localeCompare(b[0]))
-                    .map(([hour, stats]: any) => {
-                      const salesPct = (stats.sales / maxHourlySales) * 100;
-                      return (
-                        <div key={hour} className="flex items-center gap-4 group hover:bg-gray-50 dark:hover:bg-slate-800/40 rounded-xl px-3 py-2 transition-all">
-                          <div className="w-28 shrink-0">
-                            <div className="text-xs font-black text-gray-600 dark:text-slate-300">{hour.split(' - ')[0]}</div>
-                            <div className="text-xs font-semibold text-gray-400 dark:text-slate-500">to {hour.split(' - ')[1]}</div>
-                          </div>
-                          <div className="flex-1 flex flex-col gap-1">
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1 bg-gray-100 dark:bg-slate-800 h-5 rounded-lg overflow-hidden">
-                                <div 
-                                  className="h-full bg-gradient-to-r from-orange-400 to-amber-400 rounded-lg transition-all duration-700 flex items-center justify-end pr-2" 
-                                  ref={el => { if (el) el.style.width = `${Math.max(salesPct, 8)}%`; }}
-                                >
-                                  {salesPct > 25 && <span className="text-xs font-black text-white">₹{stats.sales.toFixed(0)}</span>}
-                                </div>
-                              </div>
-                              {salesPct <= 25 && <span className="text-xs font-bold text-gray-500 dark:text-slate-400 w-16 text-right">₹{stats.sales.toFixed(0)}</span>}
-                            </div>
-                          </div>
-                          <div className="w-20 text-right shrink-0">
-                            <span className="bg-orange-100 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400 px-2 py-0.5 rounded-md text-xs font-bold">{stats.orders} orders</span>
+              ) : (() => {
+                const sortedHours = Object.entries(hourlyStats).sort((a, b) => a[0].localeCompare(b[0]));
+                const hourlyList = sortedHours.map(([hour, stats]: any) => ({ hour, ...stats }));
+                const peakHourObj = [...hourlyList].sort((a, b) => b.sales - a.sales)[0];
+                const slowestHourObj = [...hourlyList].sort((a, b) => a.sales - b.sales)[0];
+
+                return (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    
+                    {/* Left: Summary cards and table */}
+                    <div className="lg:col-span-2 flex flex-col gap-5">
+                      
+                      {/* Top insight mini cards */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="p-4 rounded-2xl border border-orange-100 bg-orange-50/20 dark:border-orange-950/20 dark:bg-orange-950/10 flex items-center gap-3">
+                          <div className="p-2 bg-orange-500 text-white rounded-xl shadow-md shadow-orange-100 dark:shadow-none"><TrendingUp size={16} /></div>
+                          <div>
+                            <span className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-wider">Peak Hour (व्यस्त समय)</span>
+                            <div className="text-xs font-black text-gray-800 dark:text-slate-200 mt-0.5">{peakHourObj?.hour}</div>
+                            <div className="text-sm font-black text-orange-600 dark:text-orange-400">₹{peakHourObj?.sales.toFixed(2)}</div>
                           </div>
                         </div>
-                      );
-                    })}
+
+                        <div className="p-4 rounded-2xl border border-gray-100 bg-gray-50/50 dark:border-slate-800/80 dark:bg-slate-900/30 flex items-center gap-3">
+                          <div className="p-2 bg-gray-400 text-white rounded-xl"><Clock size={16} /></div>
+                          <div>
+                            <span className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-wider">Slowest Hour (धीमा समय)</span>
+                            <div className="text-xs font-black text-gray-800 dark:text-slate-200 mt-0.5">{slowestHourObj?.hour}</div>
+                            <div className="text-sm font-black text-gray-500 dark:text-slate-400">₹{slowestHourObj?.sales.toFixed(2)}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Hourly List Table */}
+                      <div className="flex flex-col border border-gray-100 dark:border-slate-800 rounded-2xl overflow-hidden">
+                        <div className="grid grid-cols-3 p-3.5 border-b border-gray-50 dark:border-slate-800 font-black text-xs text-gray-400 uppercase bg-gray-50/30 dark:bg-slate-900/20">
+                          <span>Hour</span>
+                          <span className="text-center">Orders</span>
+                          <span className="text-right">Revenue (₹)</span>
+                        </div>
+                        <div className="flex flex-col divide-y divide-gray-50 dark:divide-slate-800/40 max-h-[40vh] overflow-y-auto">
+                          {hourlyList.map((item) => {
+                            const isHovered = hoveredHour === item.hour;
+                            const isPeak = item.hour === peakHourObj?.hour;
+                            return (
+                              <div 
+                                key={item.hour} 
+                                className={`grid grid-cols-3 p-3.5 items-center font-bold text-xs text-gray-700 dark:text-slate-300 transition-all duration-150 cursor-pointer ${
+                                  isHovered ? 'bg-orange-50/50 dark:bg-orange-950/10' : 'hover:bg-gray-50/30 dark:hover:bg-slate-800/20'
+                                }`}
+                                onMouseEnter={() => setHoveredHour(item.hour)}
+                                onMouseLeave={() => setHoveredHour(null)}
+                              >
+                                <span className="flex items-center gap-1.5 font-bold">
+                                  {item.hour.split(' - ')[0]}
+                                  {isPeak && (
+                                    <span className="bg-orange-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full shrink-0 uppercase tracking-wide">
+                                      Peak
+                                    </span>
+                                  )}
+                                </span>
+                                <span className="text-center text-gray-500 dark:text-slate-400">{item.orders} bills</span>
+                                <span className="text-right font-black text-gray-900 dark:text-slate-100">₹{item.sales.toFixed(2)}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right: SVG Bar Chart */}
+                    <div className="bg-gray-50/30 dark:bg-slate-900/10 border border-gray-100 dark:border-slate-800 rounded-3xl p-6 flex flex-col gap-4 items-center justify-center min-h-[300px]">
+                      <h3 className="text-xs font-black uppercase text-gray-400 dark:text-slate-500 tracking-wider">Hourly Performance Chart</h3>
+                      
+                      {(() => {
+                        const width = 280;
+                        const height = 180;
+                        const paddingLeft = 35;
+                        const paddingRight = 10;
+                        const paddingTop = 15;
+                        const paddingBottom = 25;
+
+                        const chartWidth = width - paddingLeft - paddingRight;
+                        const chartHeight = height - paddingTop - paddingBottom;
+                        const barWidth = Math.max(4, Math.floor(chartWidth / hourlyList.length) - 6);
+
+                        const points = hourlyList.map((item, idx) => {
+                          const x = paddingLeft + idx * (chartWidth / hourlyList.length) + 3;
+                          const barHeight = (item.sales / maxHourlySales) * chartHeight;
+                          const y = height - paddingBottom - barHeight;
+                          return { x, y, barHeight, ...item };
+                        });
+
+                        const activeHour = hoveredHour 
+                          ? points.find((p) => p.hour === hoveredHour)
+                          : peakHourObj ? points.find((p) => p.hour === peakHourObj.hour) : null;
+
+                        return (
+                          <div className="relative w-full flex flex-col items-center gap-4">
+                            <svg viewBox={`0 0 ${width} ${height}`} className="w-full overflow-visible">
+                              <defs>
+                                <linearGradient id="hourGrad" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor="#f97316" />
+                                  <stop offset="100%" stopColor="#fdba74" />
+                                </linearGradient>
+                              </defs>
+
+                              {/* Y-Axis Grid Lines */}
+                              {[0, 0.5, 1].map((ratio, idx) => {
+                                const y = height - paddingBottom - ratio * chartHeight;
+                                const labelVal = ratio * maxHourlySales;
+                                return (
+                                  <g key={idx}>
+                                    <line 
+                                      x1={paddingLeft} 
+                                      y1={y} 
+                                      x2={width - paddingRight} 
+                                      y2={y} 
+                                      stroke="#e2e8f0" 
+                                      strokeDasharray="2 2" 
+                                      className="dark:stroke-slate-800/80"
+                                    />
+                                    <text 
+                                      x={paddingLeft - 6} 
+                                      y={y + 3} 
+                                      textAnchor="end" 
+                                      className="text-[8px] font-bold fill-gray-400 dark:fill-slate-500"
+                                    >
+                                      ₹{labelVal >= 1000 ? `${(labelVal / 1000).toFixed(0)}k` : labelVal.toFixed(0)}
+                                    </text>
+                                  </g>
+                                );
+                              })}
+
+                              {/* Vertical Bars */}
+                              {points.map((p) => {
+                                const isHovered = hoveredHour === p.hour;
+                                return (
+                                  <g key={p.hour}>
+                                    <rect 
+                                      x={p.x} 
+                                      y={p.y} 
+                                      width={barWidth} 
+                                      height={Math.max(p.barHeight, 2)} 
+                                      rx={Math.min(barWidth / 2, 3)}
+                                      fill={isHovered ? '#ea580c' : 'url(#hourGrad)'}
+                                      className="transition-all duration-200 cursor-pointer origin-bottom"
+                                      onMouseEnter={() => setHoveredHour(p.hour)}
+                                      onMouseLeave={() => setHoveredHour(null)}
+                                    />
+                                    <rect 
+                                      x={p.x - 2} 
+                                      y={paddingTop} 
+                                      width={barWidth + 4} 
+                                      height={chartHeight} 
+                                      fill="transparent" 
+                                      className="cursor-pointer"
+                                      onMouseEnter={() => setHoveredHour(p.hour)}
+                                      onMouseLeave={() => setHoveredHour(null)}
+                                    />
+                                  </g>
+                                );
+                              })}
+
+                              {/* X-Axis labels */}
+                              {points.filter((_, idx) => idx % Math.max(1, Math.floor(points.length / 4)) === 0).map((p) => (
+                                <text 
+                                  key={p.hour}
+                                  x={p.x + barWidth / 2} 
+                                  y={height - 10} 
+                                  textAnchor="middle" 
+                                  className="text-[8px] font-bold fill-gray-400 dark:fill-slate-500"
+                                >
+                                  {p.hour.split(' - ')[0]}
+                                </text>
+                              ))}
+                            </svg>
+
+                            {/* Centered Hour Detail Label */}
+                            {activeHour && (
+                              <div className="bg-orange-50/40 border border-orange-100 dark:bg-slate-900/40 dark:border-slate-800 rounded-2xl px-4 py-2.5 text-center flex flex-col gap-0.5 w-full">
+                                <span className="text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">
+                                  Selected Hour: {activeHour.hour}
+                                </span>
+                                <span className="text-sm font-black text-gray-800 dark:text-slate-100 mt-0.5">
+                                  ₹{activeHour.sales.toFixed(2)}
+                                </span>
+                                <span className="text-[10px] font-bold text-orange-600 dark:text-orange-400">
+                                  {activeHour.orders} bill(s) generated
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
+        {/* ═══ TAB: CATEGORIES ═══ */}
+        {activeTab === 'categories' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 dark:bg-slate-900 dark:border-slate-800 flex flex-col flex-1 overflow-hidden animate-in fade-in duration-200">
+            <div className="px-5 py-3.5 border-b border-gray-100 dark:border-slate-800 bg-gradient-to-r from-gray-50 to-white dark:from-slate-800 dark:to-slate-900 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded-lg"><Layers size={14} className="text-purple-600 dark:text-purple-400" /></div>
+                <h2 className="text-sm font-black text-gray-800 dark:text-slate-200">Category-Wise Sales Summary (कैटेगरी के अनुसार बिक्री)</h2>
+              </div>
+              <span className="px-3 py-1 bg-purple-50 border border-purple-200 dark:border-purple-800 dark:bg-purple-950/20 rounded-lg text-xs font-bold text-purple-700 dark:text-purple-400">
+                {sortedCategories.length} categories sold
+              </span>
+            </div>
+
+            <div className="flex-1 overflow-auto p-6">
+              {sortedCategories.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-gray-400 dark:text-slate-500 font-semibold">
+                  No category data available.
                 </div>
-              )}
+              ) : (() => {
+                const totalCategoryRevenue = sortedCategories.reduce((sum: number, c: any) => sum + c.revenue, 0);
+                
+                const CATEGORY_COLORS = [
+                  '#7c3aed', // Purple
+                  '#10b981', // Emerald
+                  '#3b82f6', // Blue
+                  '#f59e0b', // Amber
+                  '#ef4444', // Red
+                  '#ec4899', // Pink
+                  '#06b6d4', // Cyan
+                  '#14b8a6', // Teal
+                  '#f97316', // Orange
+                  '#8b5cf6', // Indigo
+                ];
+                
+                const radius = 36;
+                const strokeWidth = 10;
+                const circumference = 2 * Math.PI * radius;
+                let accumulatedPercent = 0;
+
+                const donutSlices = sortedCategories.map((cat: any, idx: number) => {
+                  const pct = totalCategoryRevenue > 0 ? (cat.revenue / totalCategoryRevenue) * 100 : 0;
+                  const dash = (pct / 100) * circumference;
+                  const offset = circumference - (accumulatedPercent / 100) * circumference;
+                  accumulatedPercent += pct;
+                  const color = CATEGORY_COLORS[idx % CATEGORY_COLORS.length];
+                  return {
+                    ...cat,
+                    pct,
+                    dash,
+                    offset,
+                    color
+                  };
+                });
+
+                const activeCat = hoveredCategory 
+                  ? donutSlices.find((c: any) => c.name === hoveredCategory)
+                  : donutSlices[0];
+
+                return (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    
+                    {/* Left: Categories Table */}
+                    <div className="lg:col-span-2 flex flex-col border border-gray-100 dark:border-slate-800 rounded-2xl overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-gray-50/50 dark:bg-slate-900/20 text-gray-400 font-bold text-xs uppercase tracking-wider border-b border-gray-100 dark:border-slate-800">
+                              <th className="py-3 px-4 w-12 text-center">#</th>
+                              <th className="py-3 px-4">Category Name</th>
+                              <th className="py-3 px-4 text-center">Qty Sold</th>
+                              <th className="py-3 px-4 text-right">Revenue</th>
+                              <th className="py-3 px-4 text-right">% Share</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {donutSlices.map((cat: any, index: number) => {
+                              const isHovered = hoveredCategory === cat.name;
+                              return (
+                                <tr 
+                                  key={cat.name} 
+                                  className={`border-b border-gray-50 dark:border-slate-800/60 transition-all duration-200 cursor-pointer ${
+                                    isHovered ? 'bg-purple-50/40 dark:bg-purple-950/15' : 'hover:bg-gray-50/30 dark:hover:bg-slate-800/20'
+                                  }`}
+                                  onMouseEnter={() => setHoveredCategory(cat.name)}
+                                  onMouseLeave={() => setHoveredCategory(null)}
+                                >
+                                  <td className="py-3 px-4 text-center">
+                                    <span className="text-xs font-bold text-gray-400 dark:text-slate-500">{index + 1}</span>
+                                  </td>
+                                  <td className="py-3 px-4 font-bold text-xs text-gray-800 dark:text-slate-200">
+                                    <div className="flex items-center gap-2">
+                                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
+                                      <span className="truncate max-w-[150px]" title={cat.name}>{cat.name}</span>
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-4 text-center">
+                                    <span className="bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-md text-xs font-bold text-gray-600 dark:text-slate-400">
+                                      {cat.qty}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4 text-right font-black text-xs text-gray-800 dark:text-slate-200">
+                                    ₹{cat.revenue.toFixed(2)}
+                                  </td>
+                                  <td className="py-3 px-4 text-right font-bold text-xs text-purple-600 dark:text-purple-400">
+                                    {cat.pct.toFixed(1)}%
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Right: SVG Donut Chart */}
+                    <div className="bg-gray-50/30 dark:bg-slate-900/10 border border-gray-100 dark:border-slate-800 rounded-3xl p-6 flex flex-col items-center justify-center gap-6">
+                      <h3 className="text-xs font-black uppercase text-gray-400 dark:text-slate-500 tracking-wider">Revenue Distribution</h3>
+                      
+                      <div className="relative w-48 h-48">
+                        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                          {donutSlices.map((slice: any) => {
+                            const isHovered = hoveredCategory === slice.name;
+                            return (
+                              <circle
+                                key={slice.name}
+                                cx="50"
+                                cy="50"
+                                r={radius}
+                                fill="transparent"
+                                stroke={slice.color}
+                                strokeWidth={isHovered ? strokeWidth + 2 : strokeWidth}
+                                strokeDasharray={`${slice.dash} ${circumference - slice.dash}`}
+                                strokeDashoffset={slice.offset}
+                                strokeLinecap={slice.pct > 2 ? 'round' : 'butt'}
+                                className="transition-all duration-300 cursor-pointer origin-center"
+                                style={{
+                                  transform: isHovered ? 'scale(1.03)' : 'scale(1)'
+                                }}
+                                onMouseEnter={() => setHoveredCategory(slice.name)}
+                                onMouseLeave={() => setHoveredCategory(null)}
+                              />
+                            );
+                          })}
+                        </svg>
+
+                        {/* Centered Donut Text */}
+                        {activeCat && (
+                          <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none p-4">
+                            <span className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider truncate max-w-[120px]">
+                              {activeCat.name}
+                            </span>
+                            <span className="text-lg font-black text-gray-800 dark:text-slate-100 mt-0.5">
+                              ₹{activeCat.revenue.toFixed(0)}
+                            </span>
+                            <span className="text-[10px] font-black text-purple-600 dark:text-purple-400">
+                              {activeCat.pct.toFixed(1)}% share
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Donut Legend */}
+                      <div className="flex flex-wrap gap-2 justify-center mt-2 max-h-32 overflow-y-auto pr-1">
+                        {donutSlices.slice(0, 6).map((slice: any) => (
+                          <div 
+                            key={slice.name} 
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-bold transition-all cursor-pointer ${
+                              hoveredCategory === slice.name 
+                                ? 'bg-white border-purple-200 text-purple-700 dark:bg-slate-800 dark:border-purple-900 dark:text-purple-400 shadow-sm'
+                                : 'bg-transparent border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-700'
+                            }`}
+                            onMouseEnter={() => setHoveredCategory(slice.name)}
+                            onMouseLeave={() => slice ? setHoveredCategory(null) : undefined}
+                          >
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: slice.color }} />
+                            <span className="truncate max-w-[80px]">{slice.name}</span>
+                          </div>
+                        ))}
+                        {donutSlices.length > 6 && (
+                          <div className="text-[9px] font-bold text-gray-400 dark:text-slate-500 flex items-center justify-center">
+                            +{donutSlices.length - 6} more categories
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
+
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}
