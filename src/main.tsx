@@ -1,11 +1,28 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import * as Sentry from '@sentry/react'
 import App from './App.tsx'
 import './index.css'
 import { AppProvider } from './contexts/AppContext'
 import { ToastProvider } from './components/Toast'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { Analytics } from '@vercel/analytics/react'
+
+const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    release: import.meta.env.VITE_APP_VERSION ? `siya-bill@${import.meta.env.VITE_APP_VERSION}` : undefined,
+    integrations: [
+      Sentry.browserTracingIntegration(),
+      Sentry.replayIntegration(),
+    ],
+    tracesSampleRate: 1.0,
+    tracePropagationTargets: ["localhost", /^\//],
+    replaysSessionSampleRate: 0.1,
+    replaysOnErrorSampleRate: 1.0,
+  });
+}
 
 if (typeof window !== 'undefined' && window.location.search.includes('clear=true')) {
   window.indexedDB.deleteDatabase('RestaurantPOS_v3');
@@ -104,7 +121,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <ThemeProvider>
       <AppProvider>
         <ToastProvider>
-          <App />
+          <Sentry.ErrorBoundary fallback={<div className="p-8 text-center text-red-500 font-black">⚠️ An unexpected error occurred. Sentry error logs have been dispatched.</div>}>
+            <App />
+          </Sentry.ErrorBoundary>
           <Analytics />
         </ToastProvider>
       </AppProvider>

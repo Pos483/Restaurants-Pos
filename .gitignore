@@ -8,3 +8,9 @@ release
 .wwebjs_auth/
 .wwebjs_cache/
 scratch/
+
+# Playwright
+playwright-report/
+test-results/
+e2e/.auth/
+coverage/

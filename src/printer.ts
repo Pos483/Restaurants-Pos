@@ -1,6 +1,7 @@
 import { OrderItem } from './types';
 import { db } from './db';
 import { logger } from './utils/logger';
+import { getBillTranslations } from './i18n';
 
 // ESC/POS Commands
 const ESC = '\x1B';
@@ -490,6 +491,7 @@ export class ThermalPrinter {
       const writer = activePort.writable.getWriter();
 
       try {
+        const t = getBillTranslations(settings?.billLanguage);
         let receipt = INIT + '\n'; 
         
         const restaurantName = (settings?.restaurantName || 'RESTAURANT POS').toUpperCase();
@@ -520,21 +522,21 @@ export class ThermalPrinter {
         
         const separator = '-'.repeat(width) + '\n';
         receipt += separator;
-        receipt += LEFT + BOLD_ON + `Bill No: ${billNumber.toString().padStart(6, '0')}\n` + BOLD_OFF;
-        if (customerName) receipt += `Customer: ${customerName}\n`;
-        if (customerPhone) receipt += `Phone: ${customerPhone}\n`;
-        receipt += `Table: ${tableId}\n`;
+        receipt += LEFT + BOLD_ON + `${t.bill.billNo}: ${billNumber.toString().padStart(6, '0')}\n` + BOLD_OFF;
+        if (customerName) receipt += `${t.bill.customer}: ${customerName}\n`;
+        if (customerPhone) receipt += `${t.bill.phone}: ${customerPhone}\n`;
+        receipt += `${t.bill.table}: ${tableId}\n`;
         const displayDate = billDate ? new Date(billDate) : new Date();
-        receipt += `Date: ${displayDate.toLocaleString()}\n`;
+        receipt += `${t.bill.date}: ${displayDate.toLocaleString()}\n`;
         receipt += separator;
         
         // Items header: Item (Width-14) Qty (3) Price (9)
         const nameWidth = width - 14;
-        receipt += LEFT + BOLD_ON + 'Item'.padEnd(nameWidth) + 'Qty'.padStart(5) + 'Price'.padStart(9) + '\n' + BOLD_OFF;
+        receipt += LEFT + BOLD_ON + t.items.item.padEnd(nameWidth) + t.items.qty.padStart(5) + t.items.price.padStart(9) + '\n' + BOLD_OFF;
         
         items.forEach(order => {
           if (!order) return;
-          let fullName = order.menuItem?.name || order.name || 'Unknown Item';
+          let fullName = order.menuItem?.name || order.name || t.items.unknown;
           let firstLineName = "";
           let remainingName = "";
 
@@ -559,16 +561,16 @@ export class ThermalPrinter {
         });
         
         receipt += separator;
-        receipt += RIGHT + `Subtotal: Rs ${subtotal.toFixed(2)}\n`;
+        receipt += RIGHT + `${t.totals.subtotal}: ${t.currency.symbol} ${subtotal.toFixed(2)}\n`;
         if (discount > 0) {
-          receipt += `Discount: -Rs ${discount.toFixed(2)}\n`;
+          receipt += `${t.totals.discount}: -${t.currency.symbol} ${discount.toFixed(2)}\n`;
         }
         if (settings?.gstPercentage > 0) {
-          receipt += `GST (${settings.gstPercentage}%): Rs ${tax.toFixed(2)}\n`;
+          receipt += `${t.totals.gst} (${settings.gstPercentage}%): ${t.currency.symbol} ${tax.toFixed(2)}\n`;
         }
         receipt += LEFT + separator;
-        receipt += CENTER + BOLD_ON + DOUBLE_HEIGHT_ON + `TOTAL: Rs ${total.toFixed(2)}\n` + BOLD_OFF + DOUBLE_HEIGHT_OFF;
-        receipt += CENTER + `Payment: ${paymentMethod}\n`;
+        receipt += CENTER + BOLD_ON + DOUBLE_HEIGHT_ON + `${t.totals.total}: ${t.currency.symbol} ${total.toFixed(2)}\n` + BOLD_OFF + DOUBLE_HEIGHT_OFF;
+        receipt += CENTER + `${t.totals.payment}: ${paymentMethod}\n`;
         receipt += LEFT + separator;
 
         // ── UPI QR Code — Canvas Raster Bitmap (works on ALL thermal printers) ──
@@ -665,7 +667,7 @@ export class ThermalPrinter {
             ]);
 
             // ── Step 4: Write to printer ──────────────────────────────────────
-            receipt += CENTER + `Scan to Pay  Rs ${total.toFixed(2)}  via UPI\n`;
+            receipt += CENTER + `${t.upi.scanToPay}  ${t.currency.symbol} ${total.toFixed(2)}  ${t.upi.via}\n`;
             await writeWithTimeout(writer, encoder.encode(receipt));
             receipt = '';
             // Center the image: send ESC a 1 (center align) before image
@@ -684,7 +686,10 @@ export class ThermalPrinter {
         }
 
         if (settings?.printThankYou !== false) {
-          let msg = settings?.thankYouMessage || 'Thank You for Visiting!\nPlease Visit Again';
+          let msg = settings?.thankYouMessage;
+          if (!msg) {
+            msg = `${t.footer.thankYou}\n${t.footer.visitAgain}`;
+          }
           receipt += CENTER + separator;
           msg.split('\n').forEach((line: string) => {
              receipt += CENTER + BOLD_ON + `*** ${line} ***\n` + BOLD_OFF;
@@ -767,21 +772,22 @@ export class ThermalPrinter {
       const writer = activePort.writable.getWriter();
 
       try {
+        const t = getBillTranslations(settings?.billLanguage);
         let kot = INIT + '\n';
         kot += CENTER + BOLD_ON + DOUBLE_HEIGHT_ON + `${label} \n` + BOLD_OFF + DOUBLE_HEIGHT_OFF;
         const separator = '-'.repeat(width) + '\n';
         kot += separator;
-        kot += LEFT + BOLD_ON + `KOT No: ${kotNumber}\n` + BOLD_OFF;
-        kot += LEFT + `Table: ${tableId}\n`;
+        kot += LEFT + BOLD_ON + `${t.kot.title} No: ${kotNumber}\n` + BOLD_OFF;
+        kot += LEFT + `${t.kot.table}: ${tableId}\n`;
         kot += `Time: ${new Date().toLocaleTimeString()}\n`;
         kot += separator;
 
         const kotNameWidth = width - 5;
-        kot += BOLD_ON + 'Item'.padEnd(kotNameWidth) + 'Qty'.padStart(5) + '\n' + BOLD_OFF;
+        kot += BOLD_ON + t.items.item.padEnd(kotNameWidth) + t.items.qty.padStart(5) + '\n' + BOLD_OFF;
 
         items.forEach(order => {
           if (!order) return;
-          let fullName = order.menuItem?.name || order.name || 'Unknown Item';
+          let fullName = order.menuItem?.name || order.name || t.items.unknown;
           let firstLineName = '';
           let remainingName = '';
 
@@ -875,21 +881,22 @@ export class ThermalPrinter {
       const writer = activePort.writable.getWriter();
 
       try {
+        const t = getBillTranslations(settings?.billLanguage);
         let kot = INIT + '\n';
-        kot += CENTER + BOLD_ON + DOUBLE_HW_ON + 'KOT CANCELLED\n' + BOLD_OFF + DOUBLE_HEIGHT_OFF;
+        kot += CENTER + BOLD_ON + DOUBLE_HW_ON + `${t.kot.title} CANCELLED\n` + BOLD_OFF + DOUBLE_HEIGHT_OFF;
         const separator = '-'.repeat(width) + '\n';
         kot += separator;
-        kot += LEFT + BOLD_ON + `KOT No: ${kotNumber} [CANCEL]\n` + BOLD_OFF;
-        kot += LEFT + `Table: ${tableId}\n`;
+        kot += LEFT + BOLD_ON + `${t.kot.title} No: ${kotNumber} [CANCEL]\n` + BOLD_OFF;
+        kot += LEFT + `${t.kot.table}: ${tableId}\n`;
         kot += `Time: ${new Date().toLocaleTimeString()}\n`;
         kot += separator;
 
         const kotNameWidth = width - 5;
-        kot += BOLD_ON + 'Item'.padEnd(kotNameWidth) + 'Qty'.padStart(5) + '\n' + BOLD_OFF;
+        kot += BOLD_ON + t.items.item.padEnd(kotNameWidth) + t.items.qty.padStart(5) + '\n' + BOLD_OFF;
 
         items.forEach(order => {
           if (!order) return;
-          let fullName = order.menuItem?.name || order.name || 'Unknown Item';
+          let fullName = order.menuItem?.name || order.name || t.items.unknown;
           let firstLineName = '';
           let remainingName = '';
 

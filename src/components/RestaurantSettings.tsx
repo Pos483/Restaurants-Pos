@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useLiveQuery, db } from '../db';
+import { useLiveQuery, db, exportDbToJson, importDbFromJson } from '../db';
 import { 
   Settings, 
   Save, 
@@ -18,7 +18,9 @@ import {
   FileText,
   Heart,
   QrCode,
-  Cloud
+  Cloud,
+  Database,
+  Upload
 } from 'lucide-react';
 import { ThermalPrinter } from '../printer';
 import { useToast } from './Toast';
@@ -86,7 +88,8 @@ export default function RestaurantSettings() {
     baudRate: 9600,
     printerWidth: 32,
     printerMode: 'single',
-    categoryLayout: 'sidebar'
+    categoryLayout: 'sidebar',
+    billLanguage: 'en'
   });
 
   const [appVersion, setAppVersion] = useState(import.meta.env.VITE_APP_VERSION || '2.0.5');
@@ -161,7 +164,8 @@ export default function RestaurantSettings() {
         baudRate: globalSettings.baudRate || 9600,
         printerWidth: globalSettings.printerWidth || 32,
         printerMode: globalSettings.printerMode || 'single',
-        categoryLayout: currentLayout
+        categoryLayout: currentLayout,
+        billLanguage: globalSettings.billLanguage || 'en'
       });
     }
   }, [globalSettings, currentLayout]);
@@ -234,6 +238,7 @@ export default function RestaurantSettings() {
         printerWidth: Number(formData.printerWidth),
         printerMode: formData.printerMode as 'single' | 'multiple',
         categoryLayout: formData.categoryLayout as 'top' | 'sidebar',
+        billLanguage: formData.billLanguage,
         gstPercentage: existingSettings.gstPercentage || 5
       } as any);
 
@@ -481,11 +486,68 @@ export default function RestaurantSettings() {
                       <span className="text-xs font-black text-gray-800 dark:text-slate-200">Next Bill Number</span>
                       <span className="text-[8px] bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-black border border-amber-200/50 dark:border-amber-900/30 uppercase tracking-wider">Automatic</span>
                     </div>
-                    <p className="text-[10px] text-gray-455 dark:text-slate-500 font-medium leading-relaxed mt-0.5">Automatically increments the bill number for each new order.</p>
+                    <p className="text-[10px] text-gray-455 dark:text-slate-550 font-medium leading-relaxed mt-0.5">Automatically increments the bill number for each new order.</p>
                   </div>
                 </div>
                 <div className="px-4 py-2 bg-white dark:bg-slate-900 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)] text-gray-800 dark:text-slate-200 font-black text-base rounded-xl border border-gray-150 dark:border-slate-800/80 min-w-[70px] text-center shrink-0">
                   {globalSettings?.billSequence || 1}
+                </div>
+              </div>
+
+              {/* Local Database Backup & Restore */}
+              <div className="p-5 border border-gray-150 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-slate-900/40 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="p-3 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-xl shrink-0">
+                    <Database size={20} />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-xs font-black text-gray-805 dark:text-slate-205 tracking-tight leading-none block">Local Database Backup</span>
+                    <p className="text-[10px] text-gray-400 dark:text-slate-500 font-bold mt-1.5 leading-relaxed">Export all POS data (Menu, Bills, Customers, Expenses) to a JSON file or restore from a previous backup.</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Export Button */}
+                  <button 
+                    onClick={async () => {
+                      try {
+                        await exportDbToJson();
+                        showToast('Local database backup exported successfully!', 'success');
+                      } catch (err: any) {
+                        showToast(`Export failed: ${err.message || err}`, 'error');
+                      }
+                    }}
+                    className="px-3.5 py-2.5 border border-gray-205 dark:border-slate-800 text-gray-700 dark:text-slate-350 hover:bg-gray-50 dark:hover:bg-slate-850 rounded-xl font-bold text-[10px] transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 shadow-sm uppercase tracking-wider bg-transparent"
+                  >
+                    <Save size={12} />
+                    Export
+                  </button>
+
+                  {/* Import Button (File Upload Wrapper) */}
+                  <label className="px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-[10px] transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 shadow-sm uppercase tracking-wider select-none">
+                    <Upload size={12} />
+                    Import
+                    <input 
+                      type="file" 
+                      accept=".json" 
+                      className="hidden" 
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+
+                        if (confirm('Are you sure you want to restore database from backup? This will merge records based on their IDs.')) {
+                          const res = await importDbFromJson(file);
+                          if (res.success) {
+                            showToast(res.message, 'success');
+                          } else {
+                            showToast(res.message, 'error');
+                          }
+                        }
+                        // Reset input value so same file can be uploaded again
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
                 </div>
               </div>
 
@@ -765,8 +827,8 @@ export default function RestaurantSettings() {
                 </div>
               </div>
 
-              {/* Speed & Roll configs */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-gray-100 dark:border-slate-800/80 pt-5">
+              {/* Speed, Roll & Language configs */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-gray-100 dark:border-slate-800/80 pt-5">
                 
                 {/* Baud Rate */}
                 <div className="flex flex-col gap-1.5">
@@ -796,6 +858,20 @@ export default function RestaurantSettings() {
                     <option value={32}>32 Columns (58mm Roll)</option>
                     <option value={42}>42 Columns (80mm Roll)</option>
                     <option value={48}>48 Columns (80mm Wide)</option>
+                  </select>
+                </div>
+
+                {/* Bill Language */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-black text-gray-400 dark:text-slate-555 uppercase tracking-widest leading-none">Bill Language</label>
+                  <select 
+                    title="Bill Language"
+                    value={formData.billLanguage}
+                    onChange={(e) => setFormData({...formData, billLanguage: e.target.value})}
+                    className="w-full p-3 rounded-2xl border border-gray-200 dark:border-slate-800 focus:outline-none focus:border-indigo-500 font-bold text-gray-800 dark:text-slate-200 text-xs bg-white dark:bg-[#0f172a] shadow-sm transition-all focus:ring-2 focus:ring-indigo-500/10 animate-fade-in"
+                  >
+                    <option value="en">English (Default)</option>
+                    <option value="hi">Hindi (Hinglish)</option>
                   </select>
                 </div>
 

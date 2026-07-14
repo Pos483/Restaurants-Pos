@@ -6,8 +6,7 @@
  * 2. Cloud Server Sync Connectivity (Supabase REST latency)
  * 3. Cryptographic AES-GCM Encryption / Decryption Integrity
  * 4. Asymmetric ECDSA P-256 License Key Verification
- * 5. Local WhatsApp API Server Check (Port 4000 status)
- * 6. Compilation & Bundling Success Audit
+ * 5. Compilation & Bundling Success Audit
  */
 
 const fs = require('fs');
@@ -45,9 +44,9 @@ async function runDiagnostics() {
 
   // ──── TEST 1: ENVIRONMENT & FOLDERS ────
   totalTests++;
-  console.log(`${colors.bright}${colors.blue}[TEST 1/6] Auditing Local Environment & Folders...${colors.reset}`);
+  console.log(`${colors.bright}${colors.blue}[TEST 1/5] Auditing Local Environment & Folders...${colors.reset}`);
   try {
-    const requiredDirs = ['src', 'electron', 'supabase', 'admin-portal', 'public'];
+    const requiredDirs = ['src', 'electron', 'supabase', 'public'];
     let dirOk = true;
     for (const dir of requiredDirs) {
       if (!fs.existsSync(path.join(__dirname, dir))) {
@@ -81,7 +80,7 @@ async function runDiagnostics() {
 
   // ──── TEST 2: CRYPTOGRAPHIC AES-GCM ────
   totalTests++;
-  console.log(`${colors.bright}${colors.blue}[TEST 2/6] Verifying AES-GCM Encrypted Local Logs...${colors.reset}`);
+  console.log(`${colors.bright}${colors.blue}[TEST 2/5] Verifying AES-GCM Encrypted Local Logs...${colors.reset}`);
   try {
     const SECRET_SALT = "siya-bill-dlq-salt-2026";
     const PASS = "siya-secure-local-log-password";
@@ -137,7 +136,7 @@ async function runDiagnostics() {
 
   // ──── TEST 3: ASYMMETRIC ECDSA LICENSE VERIFICATION ────
   totalTests++;
-  console.log(`${colors.bright}${colors.blue}[TEST 3/6] Auditing Asymmetric License Verification (ECDSA P-256)...${colors.reset}`);
+  console.log(`${colors.bright}${colors.blue}[TEST 3/5] Auditing Asymmetric License Verification (ECDSA P-256)...${colors.reset}`);
   try {
     // Public key JWK used in client (from license.ts)
     const publicKeyJwk = {
@@ -193,7 +192,7 @@ async function runDiagnostics() {
 
   // ──── TEST 4: SUPABASE CLOUD REST CONNECTION ────
   totalTests++;
-  console.log(`${colors.bright}${colors.blue}[TEST 4/6] Pinging Supabase Cloud REST APIs...${colors.reset}`);
+  console.log(`${colors.bright}${colors.blue}[TEST 4/5] Pinging Supabase Cloud REST APIs...${colors.reset}`);
   try {
     let rawEnv = '';
     if (fs.existsSync(path.join(__dirname, '.env'))) {
@@ -250,16 +249,9 @@ async function runDiagnostics() {
   }
   console.log('');
 
-  // ──── TEST 5: LOCAL WHATSAPP BOT STATUS ────
+  // ──── TEST 5: COMPILATION & BUNDLING ────
   totalTests++;
-  console.log(`${colors.bright}${colors.blue}[TEST 5/6] Checking Local WhatsApp Bot Server...${colors.reset}`);
-  console.log(`   ${tick} WhatsApp Bot has been permanently disabled by design to avoid account blockages.`);
-  passedTests++;
-
-
-  // ──── TEST 6: COMPILATION & BUNDLING ────
-  totalTests++;
-  console.log(`${colors.bright}${colors.blue}[TEST 6/6] Checking Compilation & Build Outputs...${colors.reset}`);
+  console.log(`${colors.bright}${colors.blue}[TEST 5/5] Checking Compilation & Build Outputs...${colors.reset}`);
   try {
     const distIndex = path.join(__dirname, 'dist', 'index.html');
     const adminDistIndex = path.join(__dirname, 'admin-portal', 'dist', 'index.html');

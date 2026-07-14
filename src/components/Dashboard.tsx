@@ -476,7 +476,7 @@ export default function Dashboard() {
             *** CANCELLED ***
          </div>
          <div style="text-align: center; font-size: 9px; color: #dc2626; margin-bottom: 5px;">
-            Reason: ${escapeHtml(bill.data.cancelReason || 'Unknown')}
+            Reason: ${escapeHtml(bill.data?.cancelReason || 'Unknown')}
          </div>
          <div style="border-top: 1px dashed #dc2626; margin: 5px 0;"></div>
          ` : ''}
@@ -574,7 +574,6 @@ export default function Dashboard() {
 
   return (
     <div className="h-full flex flex-col gap-6 overflow-hidden transition-colors">
-      
       {/* Stats Header */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 shrink-0">
         <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 dark:from-indigo-600 dark:to-indigo-800 rounded-3xl p-4 text-white shadow-lg shadow-indigo-200 dark:shadow-indigo-950/40 flex items-center gap-4 hover-lift transition-all min-w-0">
