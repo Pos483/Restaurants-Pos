@@ -110,6 +110,10 @@ export default function RestaurantSettings() {
     localStorage.getItem('enableCloudPrintReceiving') !== 'false'
   );
 
+  const [printerConnectionType, setPrinterConnectionType] = useState(
+    localStorage.getItem('printerConnectionType') || 'serial'
+  );
+
   const [updateStatus, setUpdateStatus] = useState<{
     type: 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error';
     message: string;
@@ -828,8 +832,26 @@ export default function RestaurantSettings() {
               </div>
 
               {/* Speed, Roll & Language configs */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-gray-100 dark:border-slate-800/80 pt-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 border-t border-gray-100 dark:border-slate-800/80 pt-5">
                 
+                {/* Printer Interface (USB vs Bluetooth) */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest leading-none">Printer Interface</label>
+                  <select 
+                    title="Printer Connection Type"
+                    value={printerConnectionType}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPrinterConnectionType(val);
+                      localStorage.setItem('printerConnectionType', val);
+                    }}
+                    className="w-full p-3 rounded-2xl border border-gray-200 dark:border-slate-800 focus:outline-none focus:border-indigo-500 font-bold text-gray-800 dark:text-slate-200 text-xs bg-white dark:bg-[#0f172a] shadow-sm transition-all focus:ring-2 focus:ring-indigo-500/10 animate-fade-in"
+                  >
+                    <option value="serial">USB / COM Port (VCP)</option>
+                    <option value="bluetooth">Bluetooth (Wireless)</option>
+                  </select>
+                </div>
+
                 {/* Baud Rate */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest leading-none">Baud Rate (Speed)</label>
