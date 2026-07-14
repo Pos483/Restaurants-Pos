@@ -4,7 +4,7 @@
   "author": "Siya Bill",
   "description": "Siya Bill - Professional Restaurant POS System",
   "private": true,
-  "version": "3.0.1",
+  "version": "3.0.2",
   "main": "electron/main.js",
   "scripts": {
     "dev": "vite",

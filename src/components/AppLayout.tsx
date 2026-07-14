@@ -5,6 +5,7 @@ import {
   Settings, Store, User as UserIcon, LogOut, CheckCircle2, XCircle,
   Unplug, AlertTriangle, Megaphone, Users
 } from 'lucide-react';
+import { db, useLiveQuery } from '../db';
 // ThermalPrinter loaded dynamically on button click to keep printer.ts out of initial bundle
 import { useApp } from '../contexts/AppContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -58,7 +59,8 @@ export function AppLayout({
 
   const handleLogout = async () => { await logout(); };
 
-  const restaurantName = ''; // passed via children context; kept minimal here
+  const profile = useLiveQuery(() => db.restaurantProfile.get('global'), [], 'restaurant_profile');
+  const restaurantName = profile?.restaurantName || 'SIYA BILL';
 
   return (
     <div className="flex h-screen bg-[#FAFBFC] dark:bg-[#0B0F19] font-sans text-gray-900 dark:text-slate-100 overflow-hidden transition-colors duration-300">
