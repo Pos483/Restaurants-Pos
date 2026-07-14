@@ -114,7 +114,7 @@ export default function Billing({ tables, onSettleBill }: Props) {
   const tax = taxableAmount * (gstPerc / 100);
   const total = taxableAmount + tax;
 
-  const handlePrintAndSettle = async () => {
+  const handlePrintAndSettle = async (shouldPrint: boolean = true) => {
     if (paymentMethod === 'Credit' && (!customerName.trim() || !customerPhone.trim())) {
       showToast('Customer name and phone number are required for Credit (Udhar) bills!', 'error');
       setShowCustomer(true);
@@ -190,10 +190,12 @@ export default function Billing({ tables, onSettleBill }: Props) {
         await recordCustomerCredit(customerName, customerPhone, total, billId, currentSeq);
       }
 
-      try {
-        await ThermalPrinter.printReceipt(selectedTable.id, selectedTable.orders, subtotal, tax, total, paymentMethod, currentSeq, globalSettings, discountVal, customerName, customerPhone, billTimestamp);
-      } catch (printErr) {
-        console.error("Printing failed, but saving/settling bill:", printErr);
+      if (shouldPrint) {
+        try {
+          await ThermalPrinter.printReceipt(selectedTable.id, selectedTable.orders, subtotal, tax, total, paymentMethod, currentSeq, globalSettings, discountVal, customerName, customerPhone, billTimestamp);
+        } catch (printErr) {
+          console.error("Printing failed, but saving/settling bill:", printErr);
+        }
       }
 
 
@@ -492,14 +494,26 @@ export default function Billing({ tables, onSettleBill }: Props) {
             </div>
           </div>
 
-          <button 
-            onClick={handlePrintAndSettle}
-            disabled={isPrinting || subtotal === 0}
-            className={`mt-auto py-5 text-white rounded-2xl font-bold text-xl flex items-center justify-center gap-3 shadow-lg transition-all active:scale-95 ${isPrinting || subtotal === 0 ? 'bg-gray-400 dark:bg-slate-800 dark:text-slate-500 cursor-not-allowed shadow-none' : 'bg-green-500 hover:bg-green-600 shadow-green-200 dark:shadow-none dark:bg-green-600 dark:hover:bg-green-700'}`}
-          >
-            <Printer size={28} />
-            {isPrinting ? 'Settling...' : 'Settle & Print'}
-          </button>
+          <div className="mt-auto flex flex-col sm:flex-row gap-3">
+            {/* Save Bill (No Print) */}
+            <button 
+              onClick={() => handlePrintAndSettle(false)}
+              disabled={isPrinting || subtotal === 0}
+              className={`flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md ${isPrinting || subtotal === 0 ? 'opacity-50 cursor-not-allowed shadow-none' : ''}`}
+            >
+              Save Bill
+            </button>
+
+            {/* Settle & Print */}
+            <button 
+              onClick={() => handlePrintAndSettle(true)}
+              disabled={isPrinting || subtotal === 0}
+              className={`flex-[2] py-4 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 ${isPrinting || subtotal === 0 ? 'bg-gray-400 dark:bg-slate-800 dark:text-slate-500 cursor-not-allowed shadow-none' : 'bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700'}`}
+            >
+              <Printer size={18} />
+              {isPrinting ? 'Settling...' : 'Settle & Print'}
+            </button>
+          </div>
         </div>
         </>
         )}
