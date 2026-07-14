@@ -7,7 +7,7 @@ import { localDb, notifyGlobalChange } from './client';
 export async function exportDbToJson(): Promise<void> {
   const backup: any = {
     app: 'siya-bill',
-    version: import.meta.env.VITE_APP_VERSION || '2.3.4',
+    version: import.meta.env.VITE_APP_VERSION || '3.0.0',
     timestamp: Date.now(),
     tables: {}
   };

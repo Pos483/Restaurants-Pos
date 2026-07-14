@@ -45,6 +45,108 @@ export class ThermalPrinter {
   static get isKOTConnected() { return !!this.kotPort; }
   static get isBarConnected() { return !!this.barPort; }
 
+  private static btDevices = new Map<string, any>();
+  private static btCharacteristics = new Map<string, any>();
+
+  private static createMockBluetoothPort(targetKey: string) {
+    return {
+      isBluetooth: true,
+      close: async () => {
+        const dev = ThermalPrinter.btDevices.get(targetKey);
+        if (dev && dev.gatt && dev.gatt.connected) {
+          try { await dev.gatt.disconnect(); } catch (_) {}
+        }
+        ThermalPrinter.btDevices.delete(targetKey);
+        ThermalPrinter.btCharacteristics.delete(targetKey);
+        (ThermalPrinter as any)[targetKey] = null;
+      },
+      writable: {
+        locked: false,
+        getWriter() {
+          this.locked = true;
+          return {
+            write: async (data: Uint8Array) => {
+              const char = ThermalPrinter.btCharacteristics.get(targetKey);
+              if (!char) throw new Error('Bluetooth printer not connected');
+              const chunkSize = 20;
+              for (let i = 0; i < data.length; i += chunkSize) {
+                const chunk = data.slice(i, i + chunkSize);
+                await char.writeValue(chunk);
+                await new Promise(r => setTimeout(r, 15));
+              }
+            },
+            releaseLock: () => {
+              this.locked = false;
+            }
+          };
+        }
+      },
+      getInfo() {
+        return {};
+      }
+    };
+  }
+
+  private static async connectBluetoothDevice(targetKey: 'port' | 'receiptPort' | 'kotPort' | 'barPort'): Promise<boolean> {
+    try {
+      if (!('bluetooth' in navigator)) {
+        throw new Error('Web Bluetooth is not supported in this browser. Please use Chrome on Android.');
+      }
+      
+      logger.log(`[Printer] Connecting Bluetooth device for ${targetKey}...`);
+      const PRINTER_SERVICE_UUID = '000018f0-0000-1000-8000-00805f9b34fb';
+      
+      const device = await (navigator as any).bluetooth.requestDevice({
+        filters: [
+          { services: [PRINTER_SERVICE_UUID] },
+          { namePrefix: 'Printer' },
+          { namePrefix: 'MTP' },
+          { namePrefix: 'PT' }
+        ],
+        optionalServices: [
+          PRINTER_SERVICE_UUID,
+          '49535343-fe7d-4158-b8db-883a2c146d5d',
+          '0000e781-0000-1000-8000-00805f9b34fb'
+        ]
+      });
+
+      const server = await device.gatt!.connect();
+      
+      let service;
+      try {
+        service = await server.getPrimaryService(PRINTER_SERVICE_UUID);
+      } catch (e) {
+        try {
+          service = await server.getPrimaryService('49535343-fe7d-4158-b8db-883a2c146d5d');
+        } catch (e2) {
+          service = await server.getPrimaryService('0000e781-0000-1000-8000-00805f9b34fb');
+        }
+      }
+
+      const characteristics = await service.getCharacteristics();
+      const writeChar = characteristics.find((c: any) => c.properties.write || c.properties.writeWithoutResponse);
+      if (!writeChar) {
+        throw new Error('Write characteristic not found on this Bluetooth device.');
+      }
+
+      this.btDevices.set(targetKey, device);
+      this.btCharacteristics.set(targetKey, writeChar);
+      
+      localStorage.setItem(`${targetKey}BluetoothName`, device.name || 'Bluetooth Printer');
+
+      const mockPort = this.createMockBluetoothPort(targetKey);
+      (this as any)[targetKey] = mockPort;
+
+      // Verify connection
+      await writeChar.writeValue(new TextEncoder().encode(INIT));
+      logger.log(`[Printer] Bluetooth printer connected as ${targetKey}:`, device.name);
+      return true;
+    } catch (err) {
+      logger.error(`[Printer] Bluetooth connection failed for ${targetKey}:`, err);
+      throw err;
+    }
+  }
+
   // Generic port-level mutex queue map
   private static portQueues = new Map<any, Promise<void>>();
 
@@ -194,6 +296,14 @@ export class ThermalPrinter {
       const baudRate = settings?.baudRate || 9600;
 
       if (!this.port) {
+        const isElectron = !!(window as any).electronAPI;
+        if (!isElectron && !('serial' in navigator)) {
+          if ('bluetooth' in navigator) {
+            return this.connectBluetoothDevice('port');
+          }
+          throw new Error('Web Serial and Web Bluetooth are not supported in this browser.');
+        }
+
         if (!('serial' in navigator)) {
           throw new Error('Web Serial API not supported in this browser. Please use Chrome/Edge for receipt printing.');
         }
@@ -227,6 +337,9 @@ export class ThermalPrinter {
       }
 
       if (this.port) {
+        if ((this.port as any).isBluetooth) {
+          return true;
+        }
         if (!this.port.readable) {
           await this.port.open({ baudRate });
         }
@@ -263,6 +376,14 @@ export class ThermalPrinter {
       const baudRate = settings?.baudRate || 9600;
 
       if (!this.receiptPort) {
+        const isElectron = !!(window as any).electronAPI;
+        if (!isElectron && !('serial' in navigator)) {
+          if ('bluetooth' in navigator) {
+            return this.connectBluetoothDevice('receiptPort');
+          }
+          throw new Error('Web Serial and Web Bluetooth are not supported in this browser.');
+        }
+
         if (!('serial' in navigator)) {
           throw new Error('Web Serial API not supported in this browser.');
         }
@@ -294,6 +415,9 @@ export class ThermalPrinter {
       }
 
       if (this.receiptPort) {
+        if ((this.receiptPort as any).isBluetooth) {
+          return true;
+        }
         if (!this.receiptPort.readable) {
           await this.receiptPort.open({ baudRate });
         }
@@ -330,6 +454,14 @@ export class ThermalPrinter {
       const baudRate = settings?.baudRate || 9600;
 
       if (!this.kotPort) {
+        const isElectron = !!(window as any).electronAPI;
+        if (!isElectron && !('serial' in navigator)) {
+          if ('bluetooth' in navigator) {
+            return this.connectBluetoothDevice('kotPort');
+          }
+          throw new Error('Web Serial and Web Bluetooth are not supported in this browser.');
+        }
+
         if (!('serial' in navigator)) {
           throw new Error('Web Serial API not supported in this browser.');
         }
@@ -361,6 +493,9 @@ export class ThermalPrinter {
       }
 
       if (this.kotPort) {
+        if ((this.kotPort as any).isBluetooth) {
+          return true;
+        }
         if (!this.kotPort.readable) {
           await this.kotPort.open({ baudRate });
         }
@@ -397,6 +532,14 @@ export class ThermalPrinter {
       const baudRate = settings?.baudRate || 9600;
 
       if (!this.barPort) {
+        const isElectron = !!(window as any).electronAPI;
+        if (!isElectron && !('serial' in navigator)) {
+          if ('bluetooth' in navigator) {
+            return this.connectBluetoothDevice('barPort');
+          }
+          throw new Error('Web Serial and Web Bluetooth are not supported in this browser.');
+        }
+
         if (!('serial' in navigator)) {
           throw new Error('Web Serial API not supported in this browser.');
         }
@@ -428,6 +571,9 @@ export class ThermalPrinter {
       }
 
       if (this.barPort) {
+        if ((this.barPort as any).isBluetooth) {
+          return true;
+        }
         if (!this.barPort.readable) {
           await this.barPort.open({ baudRate });
         }
