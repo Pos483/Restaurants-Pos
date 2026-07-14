@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { DBMenuItem, db, getNextKotNumber, deductStockForBill, recordCustomerCredit, normalizePhone, getNextBillNumber, upsertPosCustomer } from '../db';
 import { useLiveQuery } from '../db';
-import { Plus, Minus, Printer, Save, UserPlus, Tag, Star, Trash2, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Plus, Minus, Printer, Save, UserPlus, Tag, Star, Trash2, ChevronLeft, ChevronRight, X, CheckCircle } from 'lucide-react';
 import { ThermalPrinter } from '../printer';
 import CustomerModal from './CustomerModal';
 import DiscountModal from './DiscountModal';
@@ -11,7 +11,7 @@ import { useApp } from '../contexts/AppContext';
 import { useToast } from './Toast';
 
 export default function QuickBilling() {
-  const { cart, setCart, categoryLayout } = useApp();
+  const { cart, setCart, categoryLayout, setActiveTab } = useApp();
   const { showToast } = useToast();
   const categories = useLiveQuery(() => db.categories.toArray(), [], 'categories');
   const menuItems = useLiveQuery(() => db.menuItems.toArray(), [], 'menu_items');
@@ -61,6 +61,7 @@ export default function QuickBilling() {
   const [showKdsConfirm, setShowKdsConfirm] = useState<boolean>(false);
   const [pendingKdsData, setPendingKdsData] = useState<{ newItemsToPrint: any[], kotNum: string } | null>(null);
   const [pendingKotNum, setPendingKotNum] = useState<string | null>(null);
+  const [settledBillData, setSettledBillData] = useState<{ total: number; billNumber: number } | null>(null);
 
   const isSettleInProgress = useRef(false);
   const isSettleInProgressRef = useRef(false);
@@ -377,7 +378,7 @@ export default function QuickBilling() {
         showToast(`Bill #${currentSeq} Saved Successfully`);
       }
 
-
+      setSettledBillData({ total, billNumber: currentSeq });
 
       setCart([]);
       setDiscountAmount('');
@@ -862,6 +863,60 @@ export default function QuickBilling() {
           >
             View Cart 🛒
           </button>
+        </div>
+      )}
+
+      {/* Bill Settled Success Modal */}
+      {settledBillData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col items-center gap-6 animate-scale-up text-center">
+            
+            {/* Success Icon */}
+            <div className="w-16 h-16 bg-emerald-500/10 dark:bg-emerald-500/5 text-emerald-500 rounded-full flex items-center justify-center border border-emerald-500/20 shadow-lg shadow-emerald-500/5 animate-[pulse_2s_infinite]">
+              <CheckCircle size={36} className="animate-[scale-up_0.5s_ease-out]" />
+            </div>
+
+            {/* Bill Details */}
+            <div className="flex flex-col gap-1.5 animate-fade-in">
+              <h3 className="text-lg font-black tracking-tight text-gray-805 dark:text-slate-105 uppercase">
+                Bill Settled Successfully
+              </h3>
+              <p className="text-xs font-semibold text-gray-405 dark:text-slate-400">
+                Bill Number: #{settledBillData.billNumber.toString().padStart(6, '0')}
+              </p>
+            </div>
+
+            {/* Total Amount Card */}
+            <div className="w-full bg-slate-50 dark:bg-slate-900/40 border border-gray-100 dark:border-slate-800 p-4 rounded-2xl flex flex-col gap-1">
+              <span className="text-[10px] font-black text-gray-405 dark:text-slate-500 uppercase tracking-widest leading-none">Total Amount</span>
+              <span className="text-2xl font-black text-gray-805 dark:text-slate-105">
+                ₹ {settledBillData.total.toFixed(2)}
+              </span>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col w-full gap-2.5">
+              <button
+                type="button"
+                onClick={() => setSettledBillData(null)}
+                className="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-650 hover:from-indigo-650 hover:to-purple-700 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all duration-300 transform active:scale-95 shadow-md shadow-indigo-500/15 cursor-pointer"
+              >
+                Next Bill
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  setSettledBillData(null);
+                  setActiveTab('dashboard');
+                }}
+                className="w-full py-3 border border-gray-200 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/40 text-gray-600 dark:text-slate-405 rounded-2xl font-black text-xs uppercase tracking-wider transition-all duration-300 transform active:scale-95 cursor-pointer"
+              >
+                Go to Dashboard
+              </button>
+            </div>
+
+          </div>
         </div>
       )}
     </div>

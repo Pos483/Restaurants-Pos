@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Table, OrderItem, MenuItem } from '../types';
 import { DBMenuItem, DBCategory, db, localDb, getNextKotNumber, deductStockForBill, recordCustomerCredit, DBCustomer, normalizePhone, getNextBillNumber, upsertPosCustomer } from '../db';
 import { useLiveQuery } from '../db';
-import { Plus, Minus, Star, UserPlus, Tag, Printer, ArrowLeft, Trash2, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Plus, Minus, Star, UserPlus, Tag, Printer, ArrowLeft, Trash2, ChevronLeft, ChevronRight, X, CheckCircle } from 'lucide-react';
 import { ThermalPrinter } from '../printer';
 import { useToast } from './Toast';
 import { useApp } from '../contexts/AppContext';
@@ -23,7 +23,7 @@ interface Props {
 
 export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUpdateOrder, onPlaceOrder, onSettleBill }: Props) {
   const { showToast } = useToast();
-  const { categoryLayout } = useApp();
+  const { categoryLayout, setActiveTab } = useApp();
   const table = selectedTableId ? tables.find(t => t.id === selectedTableId) || null : null;
   const categories = useLiveQuery(() => db.categories.toArray(), [], 'categories');
   const menuItems = useLiveQuery(() => db.menuItems.toArray(), [], 'menu_items');
@@ -114,6 +114,7 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
   const [pendingKdsData, setPendingKdsData] = useState<{ newItemsToPrint: OrderItem[], kotNum: string } | null>(null);
   const [localOrders, setLocalOrders] = useState<OrderItem[]>([]);
   const [pendingKotNum, setPendingKotNum] = useState<string | null>(null);
+  const [settledBillData, setSettledBillData] = useState<{ total: number; billNumber: number } | null>(null);
 
   useEffect(() => {
     if (localOrders.length === 0) {
@@ -360,7 +361,7 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
         }
       }
 
-
+      setSettledBillData({ total: finalTotal, billNumber: currentSeq });
 
       onSettleBill(table.id, paymentMethod);
       setLocalOrders([]);
@@ -1116,6 +1117,64 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
           >
             View Order 🍽️
           </button>
+        </div>
+      )}
+
+      {/* Bill Settled Success Modal */}
+      {settledBillData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col items-center gap-6 animate-scale-up text-center">
+            
+            {/* Success Icon */}
+            <div className="w-16 h-16 bg-emerald-500/10 dark:bg-emerald-500/5 text-emerald-500 rounded-full flex items-center justify-center border border-emerald-500/20 shadow-lg shadow-emerald-500/5 animate-[pulse_2s_infinite]">
+              <CheckCircle size={36} className="animate-[scale-up_0.5s_ease-out]" />
+            </div>
+
+            {/* Bill Details */}
+            <div className="flex flex-col gap-1.5 animate-fade-in">
+              <h3 className="text-lg font-black tracking-tight text-gray-855 dark:text-slate-105 uppercase">
+                Bill Settled Successfully
+              </h3>
+              <p className="text-xs font-semibold text-gray-405 dark:text-slate-400">
+                Bill Number: #{settledBillData.billNumber.toString().padStart(6, '0')}
+              </p>
+            </div>
+
+            {/* Total Amount Card */}
+            <div className="w-full bg-slate-50 dark:bg-slate-900/40 border border-gray-100 dark:border-slate-800 p-4 rounded-2xl flex flex-col gap-1">
+              <span className="text-[10px] font-black text-gray-405 dark:text-slate-500 uppercase tracking-widest leading-none">Total Amount</span>
+              <span className="text-2xl font-black text-gray-805 dark:text-slate-105">
+                ₹ {settledBillData.total.toFixed(2)}
+              </span>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col w-full gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setSettledBillData(null);
+                  onSelectTable(null); // Return to table grid for Dine-in
+                }}
+                className="w-full py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-650 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all duration-300 transform active:scale-95 shadow-md shadow-orange-500/15 cursor-pointer"
+              >
+                Back to Tables
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  setSettledBillData(null);
+                  onSelectTable(null);
+                  setActiveTab('dashboard');
+                }}
+                className="w-full py-3 border border-gray-200 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/40 text-gray-600 dark:text-slate-405 rounded-2xl font-black text-xs uppercase tracking-wider transition-all duration-300 transform active:scale-95 cursor-pointer"
+              >
+                Go to Dashboard
+              </button>
+            </div>
+
+          </div>
         </div>
       )}
     </div>
