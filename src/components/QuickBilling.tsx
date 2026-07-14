@@ -28,6 +28,7 @@ export default function QuickBilling() {
   useEffect(() => {
     if (cart.length === 0) {
       setShowMobileCart(false);
+      setPendingKotNum(null);
     }
   }, [cart.length]);
 
@@ -59,6 +60,7 @@ export default function QuickBilling() {
   const isPrintingRef = useRef(false);
   const [showKdsConfirm, setShowKdsConfirm] = useState<boolean>(false);
   const [pendingKdsData, setPendingKdsData] = useState<{ newItemsToPrint: any[], kotNum: string } | null>(null);
+  const [pendingKotNum, setPendingKotNum] = useState<string | null>(null);
 
   const isSettleInProgress = useRef(false);
   const isSettleInProgressRef = useRef(false);
@@ -184,6 +186,7 @@ export default function QuickBilling() {
         ...o,
         printedQuantity: o.quantity
       })));
+      setPendingKotNum(null);
       showToast('Saved to Digital KDS');
     } catch (err) {
       console.error(err);
@@ -233,10 +236,15 @@ export default function QuickBilling() {
         return;
       }
 
-      const kotNum = await getNextKotNumber();
+      let kotNum = pendingKotNum;
+      if (!kotNum) {
+        kotNum = await getNextKotNumber();
+        setPendingKotNum(kotNum);
+      }
       const printSuccess = await ThermalPrinter.printKOT(orderType, newItemsToPrint, kotNum);
       
       if (printSuccess) {
+        setPendingKotNum(null);
         showToast(`KOT #${kotNum} Sent to Kitchen`);
         
         const isCloudPrintSendingEnabled = localStorage.getItem('enableCloudPrintSending') !== 'false';

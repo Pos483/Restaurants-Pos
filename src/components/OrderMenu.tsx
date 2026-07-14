@@ -113,10 +113,12 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
   const [showKdsConfirm, setShowKdsConfirm] = useState<boolean>(false);
   const [pendingKdsData, setPendingKdsData] = useState<{ newItemsToPrint: OrderItem[], kotNum: string } | null>(null);
   const [localOrders, setLocalOrders] = useState<OrderItem[]>([]);
+  const [pendingKotNum, setPendingKotNum] = useState<string | null>(null);
 
   useEffect(() => {
     if (localOrders.length === 0) {
       setShowMobileCart(false);
+      setPendingKotNum(null);
     }
   }, [localOrders.length]);
 
@@ -193,6 +195,7 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
     setPaymentMethod('Cash');
     setCreditCustomerName('');
     setCreditCustomerPhone('');
+    setPendingKotNum(null);
     setShowCustomer(false);
     setShowDiscount(false);
     setShowCustomItem(false);
@@ -406,6 +409,7 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
       }
       
       await db.activeOrders.update(table.id, updates);
+      setPendingKotNum(null);
       showToast('Saved to Digital KDS');
     } catch (e) {
       console.error(e);
@@ -441,10 +445,15 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
       })).filter(o => o.quantity > 0);
 
       if (newItemsToPrint.length > 0) {
-        const kotNum = await getNextKotNumber();
+        let kotNum = pendingKotNum;
+        if (!kotNum) {
+          kotNum = await getNextKotNumber();
+          setPendingKotNum(kotNum);
+        }
         const printSuccess = await ThermalPrinter.printKOT(table.id, newItemsToPrint, kotNum);
         
         if (printSuccess) {
+          setPendingKotNum(null);
           showToast(`KOT #${kotNum} Sent to Kitchen`);
           
           // Add to Live Kitchen Display (KDS)
