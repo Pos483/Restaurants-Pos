@@ -645,7 +645,7 @@ export class ThermalPrinter {
       const writer = activePort.writable.getWriter();
 
       try {
-        const t = getBillTranslations(settings?.billLanguage);
+        const t = getBillTranslations(localStorage.getItem('billLanguage') || settings?.billLanguage);
         let receipt = INIT + '\n'; 
         
         const restaurantName = (settings?.restaurantName || 'RESTAURANT POS').toUpperCase();
@@ -926,7 +926,7 @@ export class ThermalPrinter {
       const writer = activePort.writable.getWriter();
 
       try {
-        const t = getBillTranslations(settings?.billLanguage);
+        const t = getBillTranslations(localStorage.getItem('billLanguage') || settings?.billLanguage);
         let kot = INIT + '\n';
         kot += CENTER + BOLD_ON + DOUBLE_HEIGHT_ON + `${label} \n` + BOLD_OFF + DOUBLE_HEIGHT_OFF;
         const separator = '-'.repeat(width) + '\n';
@@ -1035,7 +1035,7 @@ export class ThermalPrinter {
       const writer = activePort.writable.getWriter();
 
       try {
-        const t = getBillTranslations(settings?.billLanguage);
+        const t = getBillTranslations(localStorage.getItem('billLanguage') || settings?.billLanguage);
         let kot = INIT + '\n';
         kot += CENTER + BOLD_ON + DOUBLE_HW_ON + `${t.kot.title} CANCELLED\n` + BOLD_OFF + DOUBLE_HEIGHT_OFF;
         const separator = '-'.repeat(width) + '\n';

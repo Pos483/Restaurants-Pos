@@ -169,7 +169,7 @@ export default function RestaurantSettings() {
         printerWidth: globalSettings.printerWidth || 32,
         printerMode: globalSettings.printerMode || 'single',
         categoryLayout: currentLayout,
-        billLanguage: globalSettings.billLanguage || 'en'
+        billLanguage: localStorage.getItem('billLanguage') || globalSettings.billLanguage || 'en'
       });
     }
   }, [globalSettings, currentLayout]);
@@ -245,6 +245,8 @@ export default function RestaurantSettings() {
         billLanguage: formData.billLanguage,
         gstPercentage: existingSettings.gstPercentage || 5
       } as any);
+
+      localStorage.setItem('billLanguage', formData.billLanguage);
 
       setCategoryLayout(formData.categoryLayout as 'top' | 'sidebar');
       showToast('Restaurant Settings Updated Successfully!', 'success');
