@@ -297,7 +297,8 @@ export class ThermalPrinter {
 
       if (!this.port) {
         const isElectron = !!(window as any).electronAPI;
-        if (!isElectron && !('serial' in navigator)) {
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        if (!isElectron && (isMobile || !('serial' in navigator))) {
           if ('bluetooth' in navigator) {
             return this.connectBluetoothDevice('port');
           }
@@ -377,7 +378,8 @@ export class ThermalPrinter {
 
       if (!this.receiptPort) {
         const isElectron = !!(window as any).electronAPI;
-        if (!isElectron && !('serial' in navigator)) {
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        if (!isElectron && (isMobile || !('serial' in navigator))) {
           if ('bluetooth' in navigator) {
             return this.connectBluetoothDevice('receiptPort');
           }
@@ -455,7 +457,8 @@ export class ThermalPrinter {
 
       if (!this.kotPort) {
         const isElectron = !!(window as any).electronAPI;
-        if (!isElectron && !('serial' in navigator)) {
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        if (!isElectron && (isMobile || !('serial' in navigator))) {
           if ('bluetooth' in navigator) {
             return this.connectBluetoothDevice('kotPort');
           }
@@ -533,7 +536,8 @@ export class ThermalPrinter {
 
       if (!this.barPort) {
         const isElectron = !!(window as any).electronAPI;
-        if (!isElectron && !('serial' in navigator)) {
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        if (!isElectron && (isMobile || !('serial' in navigator))) {
           if ('bluetooth' in navigator) {
             return this.connectBluetoothDevice('barPort');
           }
