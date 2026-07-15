@@ -227,7 +227,7 @@ export default function RestaurantSettings() {
       showToast('Please set your Restaurant Code in Profile Settings first.', 'error');
       return;
     }
-    const orderUrl = `https://siyabill.vercel.app/order/${restaurantCode}/${tableId}`;
+    const orderUrl = `https://siyabill.vercel.app/?r=${restaurantCode}&t=${tableId}`;
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
@@ -1205,7 +1205,7 @@ export default function RestaurantSettings() {
               {globalSettings?.restaurantCode && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                   {tables.map((tbl) => {
-                    const orderUrl = `https://siyabill.vercel.app/order/${globalSettings.restaurantCode}/${tbl.id}`;
+                    const orderUrl = `https://siyabill.vercel.app/?r=${globalSettings.restaurantCode}&t=${tbl.id}`;
                     return (
                       <div key={tbl.id} className="bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-800/80 rounded-2xl p-5 flex flex-col items-center gap-4 shadow-sm hover:shadow-md transition-all">
                         <div className="font-extrabold text-sm text-gray-850 dark:text-slate-100">

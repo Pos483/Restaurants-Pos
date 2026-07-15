@@ -134,19 +134,30 @@ export default function App() {
     );
   }
 
-  // Check if we are on a customer ordering route: /order/:restaurantCode/:tableId
-  const isOrderPath = window.location.pathname.startsWith('/order/');
-  if (isOrderPath) {
-    const parts = window.location.pathname.split('/').filter(Boolean); // ['order', 'restaurantCode', 'tableId']
-    const restaurantCode = parts[1] || '';
-    const tableId = parts[2] || '';
+  // Check if we are on a customer ordering route using query params (avoiding relative path asset issues)
+  const urlParams = new URLSearchParams(window.location.search);
+  const qRestaurantCode = urlParams.get('r') || '';
+  const qTableId = urlParams.get('t') || '';
+
+  if (qRestaurantCode && qTableId) {
     return (
       <PublicOrdering 
-        restaurantCode={restaurantCode} 
-        tableId={tableId} 
+        restaurantCode={qRestaurantCode} 
+        tableId={qTableId} 
         isOnline={isOnline}
       />
     );
+  }
+
+  // Handle old path redirection for backwards compatibility (will redirect to clean query params URL)
+  if (window.location.pathname.startsWith('/order/')) {
+    const parts = window.location.pathname.split('/').filter(Boolean); // ['order', 'restaurantCode', 'tableId']
+    const restaurantCode = parts[1] || '';
+    const tableId = parts[2] || '';
+    if (restaurantCode && tableId) {
+      window.location.replace(`/?r=${restaurantCode}&t=${tableId}`);
+      return null;
+    }
   }
 
   if (!isOnline) {
