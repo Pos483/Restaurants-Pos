@@ -251,7 +251,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
 
   if (!isOnline) {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#FAFBFC] p-6 text-center select-none">
+      <div className="h-[100dvh] w-screen flex flex-col items-center justify-center bg-[#FAFBFC] p-6 text-center select-none">
         <div className="bg-white border border-gray-150 p-8 rounded-3xl max-w-sm shadow-xl flex flex-col items-center gap-6">
           <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center animate-pulse border border-red-100">
             <Utensils size={32} />
@@ -270,7 +270,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
   // Success Screen
   if (orderSuccess) {
     return (
-      <div className="h-screen w-screen bg-[#F3F4F6] flex flex-col items-center justify-center p-6 text-center">
+      <div className="h-[100dvh] w-screen bg-[#F3F4F6] flex flex-col items-center justify-center p-6 text-center">
         <div className="bg-white border border-gray-100 rounded-3xl p-8 max-w-md w-full shadow-2xl flex flex-col items-center gap-6 animate-fade-in">
           <div className="w-20 h-20 bg-green-50 text-green-500 rounded-full flex items-center justify-center shadow-inner animate-[pulse_2s_infinite] border border-green-150">
             <CheckCircle size={42} />
@@ -295,7 +295,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
   // PIN Verification Page (Stunning glassmorphic redesign)
   if (!isVerified) {
     return (
-      <div className="h-screen w-screen bg-gradient-to-tr from-slate-900 via-slate-800 to-indigo-950 flex flex-col items-center justify-center p-6 overflow-hidden relative">
+      <div className="h-[100dvh] w-screen bg-gradient-to-tr from-slate-900 via-slate-800 to-indigo-950 flex flex-col items-center justify-center p-6 overflow-hidden relative">
         {/* Soft background light spots */}
         <div className="absolute top-[-10%] left-[-10%] w-72 h-72 rounded-full bg-orange-500/10 blur-3xl" />
         <div className="absolute bottom-[-10%] right-[-10%] w-80 h-80 rounded-full bg-rose-500/10 blur-3xl" />
@@ -341,7 +341,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
 
   // Premium Restaurant Menu View
   return (
-    <div className="h-screen flex flex-col bg-[#F9FAFB] font-sans text-gray-800 select-none overflow-hidden relative">
+    <div className="h-[100dvh] flex flex-col bg-[#F9FAFB] font-sans text-gray-800 select-none overflow-hidden relative">
       
       {/* Dynamic Gradient Header */}
       <header className="bg-gradient-to-r from-slate-900 via-slate-850 to-indigo-950 px-5 py-5 flex justify-between items-center shrink-0 shadow-md relative">
