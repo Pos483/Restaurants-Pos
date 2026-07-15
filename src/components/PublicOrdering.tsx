@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../supabase';
 import { DBMenuItem, DBCategory } from '../db/types';
-import { Plus, Minus, Search, ShoppingBag, Utensils, CheckCircle, ChevronRight } from 'lucide-react';
+import { Plus, Minus, Search, ShoppingBag, Utensils, CheckCircle, ChevronRight, X, Phone, User } from 'lucide-react';
 
 interface Props {
   restaurantCode: string;
@@ -47,7 +47,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
     setPinError('');
 
     if (!supabase) {
-      setPinError('Supabase database is not initialized.');
+      setPinError('Database connection unavailable.');
       setVerifying(false);
       return;
     }
@@ -63,7 +63,6 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
 
       if (data === true) {
         setIsVerified(true);
-        // Load menu once verified
         loadMenuAndCategories();
       } else {
         setPinError('Invalid PIN! Please ask the waiter for the correct code.');
@@ -81,7 +80,6 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
     if (!supabase) return;
     setLoadingMenu(true);
     try {
-      // Get the app_user_id (tenant ID)
       const { data: profile, error: profileErr } = await supabase
         .from('restaurant_profile')
         .select('app_user_id, restaurant_name')
@@ -93,7 +91,6 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
       setRestaurantName(profile.restaurant_name || 'Restaurant');
       setTenantId(profile.app_user_id);
 
-      // Fetch categories & menu items
       const [menuRes, catRes] = await Promise.all([
         supabase
           .from('menu_items')
@@ -109,7 +106,6 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
       if (menuRes.error) throw menuRes.error;
       if (catRes.error) throw catRes.error;
 
-      // Map Supabase rows to local DB types
       const parsedMenu: DBMenuItem[] = (menuRes.data || []).map(r => ({
         id: r.id,
         name: r.name,
@@ -124,10 +120,9 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
         printerTarget: r.printer_target
       }));
 
-      const parsedCats: DBCategory[] = (catRes.data || []).map(r => ({
-        id: r.id,
-        name: r.name
-      }));
+      const parsedCats: DBCategory[] = (catRes.data || [])
+        .map(r => ({ id: r.id, name: r.name }))
+        .filter(c => c.name && c.name.trim() !== ''); // Filter out empty category names
 
       setMenuItems(parsedMenu);
       setCategories(parsedCats);
@@ -175,7 +170,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
     setPlacingOrder(true);
 
     if (!supabase) {
-      alert('Supabase is not initialized.');
+      alert('Database connection unavailable.');
       setPlacingOrder(false);
       return;
     }
@@ -213,41 +208,47 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
     }
   };
 
-  // Filter menu items
   const filteredMenuItems = menuItems.filter(item => {
     const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
-  // Early return if offline
   if (!isOnline) {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#f8f9fa] p-6 text-center">
-        <Utensils size={48} className="text-red-500 mb-4 animate-bounce" />
-        <h1 className="text-xl font-extrabold text-gray-800">Internet connection required</h1>
-        <p className="text-xs text-gray-500 mt-2">Dine-in self ordering requires a live internet connection.</p>
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#FAFBFC] p-6 text-center select-none">
+        <div className="bg-white border border-gray-150 p-8 rounded-3xl max-w-sm shadow-xl flex flex-col items-center gap-6">
+          <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center animate-pulse border border-red-100">
+            <Utensils size={32} />
+          </div>
+          <div>
+            <h1 className="text-lg font-black text-gray-800">Connection Offline</h1>
+            <p className="text-[11px] text-gray-400 font-bold mt-2 leading-relaxed">
+              Dine-in self ordering requires a live internet connection to communicate with the restaurant. Please check your data or Wi-Fi.
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
 
-  // 5. Success Screen
+  // Success Screen
   if (orderSuccess) {
     return (
-      <div className="h-screen w-screen bg-[#FAFBFC] flex flex-col items-center justify-center p-6 text-center">
-        <div className="bg-white border border-gray-100 rounded-3xl p-8 max-w-sm shadow-xl flex flex-col items-center gap-6">
-          <div className="w-16 h-16 bg-green-50 text-green-500 rounded-full flex items-center justify-center shadow-inner animate-[pulse_2s_infinite]">
-            <CheckCircle size={36} />
+      <div className="h-screen w-screen bg-[#F3F4F6] flex flex-col items-center justify-center p-6 text-center">
+        <div className="bg-white border border-gray-100 rounded-3xl p-8 max-w-md w-full shadow-2xl flex flex-col items-center gap-6 animate-fade-in">
+          <div className="w-20 h-20 bg-green-50 text-green-500 rounded-full flex items-center justify-center shadow-inner animate-[pulse_2s_infinite] border border-green-150">
+            <CheckCircle size={42} />
           </div>
           <div>
-            <h1 className="text-xl font-black text-gray-800">Order Placed Successfully!</h1>
-            <p className="text-[11px] text-gray-500 font-bold mt-2 leading-relaxed">
-              Your order has been submitted to the kitchen. Chef will start preparing your food once confirmed. Thank you!
+            <h1 className="text-2xl font-black text-gray-850 tracking-tight">Order Placed!</h1>
+            <p className="text-xs text-gray-500 font-bold mt-2.5 leading-relaxed max-w-xs mx-auto">
+              Your order has been submitted. Cooking will begin once the cashier confirms. Enjoy your meal!
             </p>
           </div>
           <button
             onClick={() => setOrderSuccess(false)}
-            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl text-xs shadow-md transition-all cursor-pointer"
+            className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700 text-white font-extrabold rounded-2xl text-xs shadow-lg shadow-orange-500/20 active:scale-95 transition-all cursor-pointer"
           >
             Order More Items
           </button>
@@ -256,82 +257,90 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
     );
   }
 
-  // 6. Verification Screen (Enter PIN)
+  // PIN Verification Page (Stunning glassmorphic redesign)
   if (!isVerified) {
     return (
-      <div className="h-screen w-screen bg-[#FAFBFC] flex flex-col items-center justify-center p-6">
-        <form onSubmit={handleVerifyPin} className="bg-white border border-gray-100 rounded-3xl p-8 max-w-sm w-full shadow-xl flex flex-col gap-6">
+      <div className="h-screen w-screen bg-gradient-to-tr from-slate-900 via-slate-800 to-indigo-950 flex flex-col items-center justify-center p-6 overflow-hidden relative">
+        {/* Soft background light spots */}
+        <div className="absolute top-[-10%] left-[-10%] w-72 h-72 rounded-full bg-orange-500/10 blur-3xl" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-80 h-80 rounded-full bg-rose-500/10 blur-3xl" />
+
+        <form onSubmit={handleVerifyPin} className="bg-white/10 backdrop-blur-md border border-white/20 rounded-3xl p-8 max-w-sm w-full shadow-2xl flex flex-col gap-6 animate-fade-in relative z-10">
           <div className="flex flex-col items-center text-center">
-            <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-4">
-              <Utensils size={28} />
+            <div className="w-16 h-16 bg-gradient-to-tr from-orange-500 to-rose-500 text-white rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-orange-500/20">
+              <Utensils size={32} className="animate-[pulse_3s_infinite]" />
             </div>
-            <h1 className="text-xl font-black text-gray-800 leading-tight">Dine-in Ordering</h1>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1.5">Table {tableId}</p>
+            <h1 className="text-2xl font-black text-white tracking-tight leading-tight">Dine-in Ordering</h1>
+            <p className="text-[10px] text-orange-400 font-extrabold uppercase tracking-widest mt-1">Table {tableId}</p>
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Enter Table PIN</label>
+          <div className="flex flex-col gap-2">
+            <label className="text-[10px] font-black uppercase text-slate-350 tracking-wider text-center">Enter Table PIN</label>
             <input
               type="text"
               inputMode="numeric"
               maxLength={3}
-              placeholder="e.g. 184"
+              placeholder="0 0 0"
               value={pin}
               onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-              className="w-full px-4 py-3 bg-slate-50 border border-gray-100 rounded-xl font-black text-center text-lg focus:outline-none focus:border-indigo-500 tracking-widest"
+              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-2xl font-black text-center text-2xl text-white focus:outline-none focus:border-orange-500 tracking-[0.75em] focus:bg-white/15 transition-all shadow-inner placeholder:text-slate-600"
             />
             {pinError && (
-              <p className="text-[10px] text-red-500 font-bold mt-1 text-center">{pinError}</p>
+              <p className="text-[10px] text-red-400 font-bold mt-1 text-center animate-shake">{pinError}</p>
             )}
           </div>
 
           <button
             type="submit"
             disabled={verifying || pin.length !== 3}
-            className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-100 disabled:text-gray-400 text-white font-extrabold rounded-xl text-xs shadow-md transition-all cursor-pointer flex justify-center items-center gap-1.5"
+            className="w-full py-4 bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700 disabled:from-slate-800 disabled:to-slate-900 disabled:text-slate-600 text-white font-extrabold rounded-2xl text-xs shadow-lg shadow-orange-500/10 hover:shadow-orange-500/20 transition-all duration-200 cursor-pointer active:scale-95 flex justify-center items-center gap-2 border border-white/5"
           >
-            {verifying ? 'Verifying PIN...' : 'Access Menu'}
+            {verifying ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : 'Access Digital Menu'}
           </button>
         </form>
       </div>
     );
   }
 
-  // 7. Menu Browsing Screen
+  // Premium Restaurant Menu View
   return (
-    <div className="h-screen flex flex-col bg-[#FAFBFC] font-sans text-gray-800 select-none overflow-hidden">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-100 px-5 py-4 flex justify-between items-center shrink-0">
-        <div>
-          <h1 className="text-base font-black text-gray-900 leading-tight truncate max-w-[200px]">{restaurantName}</h1>
-          <p className="text-[9px] text-gray-400 font-black uppercase mt-0.5 tracking-wider">Table {tableId}</p>
+    <div className="h-screen flex flex-col bg-[#F9FAFB] font-sans text-gray-800 select-none overflow-hidden relative">
+      
+      {/* Dynamic Gradient Header */}
+      <header className="bg-gradient-to-r from-slate-900 via-slate-850 to-indigo-950 px-5 py-5 flex justify-between items-center shrink-0 shadow-md relative">
+        <div className="absolute inset-0 bg-gradient-to-r from-orange-500/10 to-rose-500/10 pointer-events-none" />
+        <div className="relative z-10 min-w-0 pr-4">
+          <h1 className="text-base font-black text-white leading-tight truncate">{restaurantName}</h1>
+          <p className="text-[9px] text-orange-400 font-black uppercase mt-0.5 tracking-widest">Table {tableId}</p>
         </div>
-        <div className="flex items-center gap-1.5 text-[9px] font-extrabold uppercase text-green-600 bg-green-50 border border-green-100 px-2.5 py-1 rounded-full">
-          <div className="w-1.5 h-1.5 rounded-full bg-green-500" /> Session Active
+        <div className="relative z-10 flex items-center gap-1.5 text-[9px] font-black uppercase text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full shadow-sm">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live Session
         </div>
       </header>
 
-      {/* Categories & Search */}
-      <div className="bg-white border-b border-gray-50 p-4 shrink-0 flex flex-col gap-3.5">
+      {/* Filter / Search Bar */}
+      <div className="bg-white border-b border-gray-150 p-4 shrink-0 flex flex-col gap-3.5 shadow-sm relative z-20">
         <div className="relative">
-          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Search food items..."
+            placeholder="Search delicious dishes..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-gray-100 rounded-xl text-xs focus:outline-none focus:border-indigo-500 font-bold"
+            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-gray-150 rounded-2xl text-xs focus:outline-none focus:border-orange-500 font-bold focus:bg-white transition-all shadow-inner"
           />
         </div>
         
-        {/* Categories Bar */}
-        <div className="flex gap-2.5 overflow-x-auto scrollbar-hide shrink-0 pb-1">
+        {/* Horizontal Category Chips */}
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide shrink-0 pb-1 -mx-4 px-4">
           <button
             onClick={() => setSelectedCategory('All')}
-            className={`px-3.5 py-1.5 rounded-full text-[10px] font-black tracking-wider uppercase whitespace-nowrap transition-all border cursor-pointer ${
+            className={`px-4 py-2 rounded-full text-[10px] font-black tracking-wider uppercase whitespace-nowrap transition-all border cursor-pointer ${
               selectedCategory === 'All'
-                ? 'bg-indigo-650 text-white border-indigo-600 shadow-sm'
-                : 'bg-slate-50 text-gray-500 border-gray-100'
+                ? 'bg-gradient-to-r from-orange-500 to-rose-500 text-white border-orange-500 shadow-md shadow-orange-500/15'
+                : 'bg-slate-50 text-gray-500 border-gray-150 hover:bg-slate-100'
             }`}
           >
             All Items
@@ -340,10 +349,10 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
             <button
               key={cat.id}
               onClick={() => setSelectedCategory(cat.name)}
-              className={`px-3.5 py-1.5 rounded-full text-[10px] font-black tracking-wider uppercase whitespace-nowrap transition-all border cursor-pointer ${
+              className={`px-4 py-2 rounded-full text-[10px] font-black tracking-wider uppercase whitespace-nowrap transition-all border cursor-pointer ${
                 selectedCategory === cat.name
-                  ? 'bg-indigo-650 text-white border-indigo-600 shadow-sm'
-                  : 'bg-slate-50 text-gray-500 border-gray-100'
+                  ? 'bg-gradient-to-r from-orange-500 to-rose-500 text-white border-orange-500 shadow-md shadow-orange-500/15'
+                  : 'bg-slate-50 text-gray-500 border-gray-150 hover:bg-slate-100'
               }`}
             >
               {cat.name}
@@ -352,50 +361,50 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
         </div>
       </div>
 
-      {/* Menu List */}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 scrollbar-hide pb-24">
+      {/* Grid of Dishes */}
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5 scrollbar-hide pb-28">
         {loadingMenu ? (
           <div className="h-full flex items-center justify-center">
-            <div className="w-8 h-8 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-8 h-8 border-3 border-orange-500 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : filteredMenuItems.length === 0 ? (
-          <div className="text-center py-12 text-xs font-bold text-gray-400">
-            No items found matching the search.
+          <div className="text-center py-16 text-xs font-bold text-gray-400">
+            No dishes found matching your selection.
           </div>
         ) : (
           filteredMenuItems.map((item) => {
             const cartQty = cart.find(i => i.menuItem.id === item.id)?.quantity || 0;
             return (
-              <div key={item.id} className="bg-white border border-gray-100/60 rounded-2xl p-4 flex justify-between items-center shadow-sm">
-                <div className="flex flex-col gap-1 min-w-0 pr-4">
-                  <div className="flex items-center gap-1.5">
+              <div key={item.id} className="bg-white border border-gray-100 rounded-2xl p-4 flex justify-between items-center shadow-sm hover:shadow-md hover:border-gray-200 transition-all duration-200 group">
+                <div className="flex flex-col gap-1.5 min-w-0 pr-4">
+                  <div className="flex items-center gap-2">
                     {item.dietary && (
-                      <span className={`w-3 h-3 border flex items-center justify-center shrink-0 p-0.5 ${
+                      <span className={`w-3.5 h-3.5 border flex items-center justify-center shrink-0 p-0.5 rounded ${
                         item.dietary === 'veg' ? 'border-green-600 text-green-600' : 'border-red-600 text-red-600'
                       }`} style={{ borderWidth: '1.5px' }}>
                         <span className={`w-1.5 h-1.5 rounded-full ${item.dietary === 'veg' ? 'bg-green-600' : 'bg-red-600'}`} />
                       </span>
                     )}
-                    <span className="font-extrabold text-[13px] text-gray-800 truncate leading-snug">{item.name}</span>
+                    <span className="font-extrabold text-[13px] text-gray-800 truncate group-hover:text-orange-600 transition-colors duration-200 leading-snug">{item.name}</span>
                   </div>
-                  <span className="text-xs font-extrabold text-gray-900">₹{item.price.toFixed(2)}</span>
+                  <span className="text-[13px] font-black text-gray-900">₹{item.price.toFixed(2)}</span>
                 </div>
 
                 <div className="shrink-0">
                   {cartQty > 0 ? (
-                    <div className="flex items-center gap-2.5 bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100/50 rounded-xl px-2.5 py-1 text-xs">
-                      <button onClick={() => updateQuantity(item.id, -1)} className="text-indigo-650 hover:text-indigo-700 active:scale-95 cursor-pointer">
-                        <Minus size={14} strokeWidth={3} />
+                    <div className="flex items-center gap-3 bg-orange-50 border border-orange-100 rounded-2xl px-3 py-1.5 text-xs shadow-sm">
+                      <button onClick={() => updateQuantity(item.id, -1)} className="text-orange-600 hover:text-orange-700 active:scale-90 transition-transform cursor-pointer">
+                        <Minus size={13} strokeWidth={3.5} />
                       </button>
-                      <span className="font-black text-indigo-700 w-4 text-center">{cartQty}</span>
-                      <button onClick={() => addToCart(item)} className="text-indigo-650 hover:text-indigo-700 active:scale-95 cursor-pointer">
-                        <Plus size={14} strokeWidth={3} />
+                      <span className="font-black text-orange-700 w-4 text-center">{cartQty}</span>
+                      <button onClick={() => addToCart(item)} className="text-orange-600 hover:text-orange-700 active:scale-90 transition-transform cursor-pointer">
+                        <Plus size={13} strokeWidth={3.5} />
                       </button>
                     </div>
                   ) : (
                     <button
                       onClick={() => addToCart(item)}
-                      className="px-4.5 py-1.5 bg-indigo-50 border border-indigo-100/50 text-indigo-650 hover:bg-indigo-100 hover:text-indigo-700 font-extrabold text-xs rounded-xl active:scale-95 cursor-pointer flex items-center justify-center gap-1"
+                      className="px-5 py-2 bg-orange-50 border border-orange-100/50 text-orange-600 hover:bg-orange-600 hover:text-white font-extrabold text-[11px] rounded-2xl active:scale-95 cursor-pointer shadow-sm hover:shadow transition-all duration-200"
                     >
                       ADD
                     </button>
@@ -407,99 +416,104 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
         )}
       </div>
 
-      {/* Floating Cart Button */}
+      {/* Floating View Cart Trigger */}
       {totalCartItems > 0 && !showCart && (
-        <div className="absolute bottom-4 left-4 right-4 bg-indigo-600 text-white rounded-2xl p-4 flex justify-between items-center shadow-lg shadow-indigo-500/25 animate-[pulse_3s_infinite]">
-          <div className="flex items-center gap-2 text-xs font-extrabold">
-            <ShoppingBag size={18} />
+        <div className="absolute bottom-5 left-4 right-4 bg-gradient-to-r from-orange-500 to-rose-600 text-white rounded-2xl p-4 flex justify-between items-center shadow-lg shadow-orange-500/30 animate-[pulse_2.5s_infinite] z-30">
+          <div className="flex items-center gap-2 text-xs font-black">
+            <ShoppingBag size={18} className="animate-bounce" />
             <span>{totalCartItems} Items | ₹{cartSubtotal.toFixed(2)}</span>
           </div>
           <button
             onClick={() => setShowCart(true)}
-            className="flex items-center gap-1 text-xs font-black uppercase bg-white/10 hover:bg-white/20 px-3.5 py-1.5 rounded-xl transition-all cursor-pointer"
+            className="flex items-center gap-1.5 text-[10px] font-black uppercase bg-white/15 hover:bg-white/25 px-4 py-2 rounded-xl transition-all cursor-pointer border border-white/10"
           >
-            View Cart
-            <ChevronRight size={14} strokeWidth={2.5} />
+            Review Cart
+            <ChevronRight size={14} strokeWidth={3} />
           </button>
         </div>
       )}
 
-      {/* Cart Slider/Drawer */}
+      {/* Slide-Up Cart Drawer */}
       {showCart && (
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-xs z-50 flex flex-col justify-end">
-          <div className="bg-white rounded-t-3xl max-h-[85%] flex flex-col shadow-2xl animate-slide-up">
+        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex flex-col justify-end">
+          <div className="bg-white rounded-t-3xl max-h-[85%] flex flex-col shadow-2xl animate-slide-up overflow-hidden">
             
-            {/* Header */}
-            <div className="px-5 py-4.5 border-b border-gray-100 flex justify-between items-center shrink-0">
-              <h2 className="text-sm font-black text-gray-800">Your Cart ({totalCartItems})</h2>
+            {/* Drawer Header */}
+            <div className="px-5 py-4.5 border-b border-gray-150 flex justify-between items-center shrink-0 bg-slate-50/50">
+              <div>
+                <h2 className="text-sm font-black text-gray-800">Your Basket</h2>
+                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">{totalCartItems} Items Selected</p>
+              </div>
               <button
                 onClick={() => setShowCart(false)}
-                className="text-xs font-bold text-gray-400 hover:text-gray-600 cursor-pointer"
+                className="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-500 rounded-full cursor-pointer transition-colors"
               >
-                Close
+                <X size={14} strokeWidth={2.5} />
               </button>
             </div>
 
             {/* Cart Items List */}
-            <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-3.5 scrollbar-hide">
+            <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4.5 scrollbar-hide">
               {cart.map((item) => (
                 <div key={item.menuItem.id} className="flex justify-between items-center">
                   <div className="min-w-0 pr-4">
-                    <p className="font-extrabold text-[12px] text-gray-800 truncate leading-snug">{item.menuItem.name}</p>
-                    <p className="text-[10px] text-gray-400 font-bold mt-0.5">₹{item.menuItem.price.toFixed(2)} each</p>
+                    <p className="font-extrabold text-[12px] text-gray-850 truncate leading-snug">{item.menuItem.name}</p>
+                    <p className="text-[10px] text-orange-600 font-black mt-0.5">₹{item.menuItem.price.toFixed(2)} each</p>
                   </div>
-                  <div className="flex items-center gap-2.5 bg-slate-50 border border-gray-100 rounded-xl px-2.5 py-1 text-xs shrink-0">
-                    <button onClick={() => updateQuantity(item.menuItem.id, -1)} className="text-gray-500 hover:text-gray-700 active:scale-95 cursor-pointer">
-                      <Minus size={14} strokeWidth={3} />
+                  <div className="flex items-center gap-3 bg-slate-50 border border-gray-150 rounded-2xl px-3 py-1.5 text-xs shrink-0 shadow-inner">
+                    <button onClick={() => updateQuantity(item.menuItem.id, -1)} className="text-gray-500 hover:text-gray-700 active:scale-90 transition-transform cursor-pointer">
+                      <Minus size={13} strokeWidth={3.5} />
                     </button>
                     <span className="font-black text-gray-700 w-4 text-center">{item.quantity}</span>
-                    <button onClick={() => addToCart(item.menuItem)} className="text-gray-500 hover:text-gray-700 active:scale-95 cursor-pointer">
-                      <Plus size={14} strokeWidth={3} />
+                    <button onClick={() => addToCart(item.menuItem)} className="text-gray-500 hover:text-gray-700 active:scale-90 transition-transform cursor-pointer">
+                      <Plus size={13} strokeWidth={3.5} />
                     </button>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Customer Details Form */}
-            <form onSubmit={handlePlaceOrder} className="p-5 border-t border-gray-100 bg-slate-50/50 flex flex-col gap-4 shrink-0">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[9px] font-black uppercase text-gray-400 tracking-wider">Your Name</label>
+            {/* Checkout / Contact Form */}
+            <form onSubmit={handlePlaceOrder} className="p-5 border-t border-gray-150 bg-slate-50/50 flex flex-col gap-4.5 shrink-0">
+              <div className="flex flex-col gap-3">
+                <div className="relative">
+                  <User size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
                     type="text"
                     required
-                    placeholder="Enter name"
+                    placeholder="Enter Your Name"
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-150 rounded-xl text-xs focus:outline-none focus:border-indigo-500 font-bold"
+                    className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-150 rounded-2xl text-xs focus:outline-none focus:border-orange-500 font-bold focus:ring-1 focus:ring-orange-500/20"
                   />
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[9px] font-black uppercase text-gray-400 tracking-wider">Mobile Number</label>
+                <div className="relative">
+                  <Phone size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
                     type="tel"
                     required
                     pattern="[0-9]{10}"
-                    placeholder="10-digit number"
+                    placeholder="10-digit Mobile Number"
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, '').substring(0, 10))}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-150 rounded-xl text-xs focus:outline-none focus:border-indigo-500 font-bold"
+                    className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-150 rounded-2xl text-xs focus:outline-none focus:border-orange-500 font-bold focus:ring-1 focus:ring-orange-500/20"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-between items-center text-xs font-black text-gray-800 mt-1">
-                <span>Subtotal</span>
-                <span>₹{cartSubtotal.toFixed(2)}</span>
+              <div className="flex justify-between items-center text-xs font-black text-gray-800 border-t border-gray-200/50 pt-3">
+                <span className="text-gray-400 uppercase font-black text-[10px] tracking-wider">Total Amount</span>
+                <span className="text-sm font-black text-gray-900">₹{cartSubtotal.toFixed(2)}</span>
               </div>
 
               <button
                 type="submit"
                 disabled={placingOrder}
-                className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs shadow-md transition-all cursor-pointer flex justify-center items-center gap-1.5"
+                className="w-full py-4 bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700 text-white font-black rounded-2xl text-xs shadow-lg shadow-orange-500/20 transition-all duration-200 cursor-pointer flex justify-center items-center gap-1.5 active:scale-95 border border-white/5"
               >
-                {placingOrder ? 'Submitting Order...' : 'Send Order to Kitchen'}
+                {placingOrder ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : 'Place Order & Send to Kitchen'}
               </button>
             </form>
 
