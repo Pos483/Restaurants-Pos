@@ -7,6 +7,10 @@ import { AppProvider } from './contexts/AppContext'
 import { ToastProvider } from './components/Toast'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { Analytics } from '@vercel/analytics/react'
+import { initAnalytics } from './utils/analytics'
+
+// Initialize Google Analytics (safe for web and Electron desktop apps)
+initAnalytics();
 
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
 if (sentryDsn) {

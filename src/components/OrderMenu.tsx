@@ -3,6 +3,7 @@ import { Table, OrderItem, MenuItem } from '../types';
 import { DBMenuItem, DBCategory, db, localDb, getNextKotNumber, deductStockForBill, recordCustomerCredit, DBCustomer, normalizePhone, getNextBillNumber, upsertPosCustomer } from '../db';
 import { useLiveQuery } from '../db';
 import { Plus, Minus, Star, UserPlus, Tag, Printer, ArrowLeft, Trash2, ChevronLeft, ChevronRight, X, CheckCircle } from 'lucide-react';
+import { trackEvent } from '../utils/analytics';
 import { ThermalPrinter } from '../printer';
 import { useToast } from './Toast';
 import { useApp } from '../contexts/AppContext';
@@ -362,6 +363,7 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
       }
 
       setSettledBillData({ total: finalTotal, billNumber: currentSeq });
+      trackEvent('settle_bill', 'billing', paymentMethod, finalTotal);
 
       onSettleBill(table.id, paymentMethod);
       setLocalOrders([]);

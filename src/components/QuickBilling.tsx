@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { DBMenuItem, db, getNextKotNumber, deductStockForBill, recordCustomerCredit, normalizePhone, getNextBillNumber, upsertPosCustomer } from '../db';
 import { useLiveQuery } from '../db';
 import { Plus, Minus, Printer, Save, UserPlus, Tag, Star, Trash2, ChevronLeft, ChevronRight, X, CheckCircle } from 'lucide-react';
+import { trackEvent } from '../utils/analytics';
 import { ThermalPrinter } from '../printer';
 import CustomerModal from './CustomerModal';
 import DiscountModal from './DiscountModal';
@@ -379,6 +380,7 @@ export default function QuickBilling() {
       }
 
       setSettledBillData({ total, billNumber: currentSeq });
+      trackEvent('settle_bill', 'billing', paymentMethod, total);
 
       setCart([]);
       setDiscountAmount('');
