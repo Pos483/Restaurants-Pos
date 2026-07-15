@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLiveQuery, db, exportDbToJson, importDbFromJson } from '../db';
+import { QRCodeSVG } from 'qrcode.react';
 import { 
   Settings, 
   Save, 
@@ -69,13 +70,14 @@ export default function RestaurantSettings() {
   const { categoryLayout: currentLayout, setCategoryLayout } = useApp();
   const { showToast } = useToast();
   
-  const [activeSubTab, setActiveSubTab] = useState<'general' | 'printer' | 'whatsapp' | 'updates'>('general');
+  const [activeSubTab, setActiveSubTab] = useState<'general' | 'printer' | 'whatsapp' | 'updates' | 'qr_generator'>('general');
 
   const globalSettings = useLiveQuery(async () => {
     const profile = await db.restaurantProfile.get('global');
     const sys = await db.restaurantSettings.get('global');
     return { ...(profile || {}), ...(sys || {}) };
   }, [], ['restaurant_profile', 'restaurant_settings']);
+  const tables = useLiveQuery(() => db.activeOrders.toArray(), [], 'active_orders') || [];
 
   const [formData, setFormData] = useState({
     printPhone: true,
@@ -219,6 +221,100 @@ export default function RestaurantSettings() {
       showToast('Update check is only available in the installed application.', 'info');
     }
   };
+  const handlePrintQR = (tableId: number) => {
+    const restaurantCode = globalSettings?.restaurantCode || '';
+    if (!restaurantCode) {
+      showToast('Please set your Restaurant Code in Profile Settings first.', 'error');
+      return;
+    }
+    const orderUrl = `https://siyabill.vercel.app/order/${restaurantCode}/${tableId}`;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Print QR Code - Table ${tableId}</title>
+          <style>
+            body {
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+              text-align: center;
+              padding: 40px;
+              color: #333;
+            }
+            .card {
+              border: 3px solid #f97316;
+              border-radius: 24px;
+              padding: 40px 20px;
+              max-width: 320px;
+              margin: 0 auto;
+              box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            }
+            h1 {
+              font-size: 26px;
+              font-weight: 900;
+              margin: 0 0 5px 0;
+              color: #1e293b;
+            }
+            .sub {
+              font-size: 16px;
+              font-weight: 800;
+              color: #f97316;
+              text-transform: uppercase;
+              letter-spacing: 2px;
+              margin-bottom: 25px;
+            }
+            .qr-container {
+              background: #fff;
+              padding: 15px;
+              display: inline-block;
+              border-radius: 16px;
+              border: 1px solid #e2e8f0;
+              margin-bottom: 25px;
+            }
+            .instructions {
+              font-size: 14px;
+              font-weight: 800;
+              color: #475569;
+              margin-bottom: 5px;
+            }
+            .url {
+              font-size: 10px;
+              font-weight: 600;
+              color: #94a3b8;
+              word-break: break-all;
+            }
+            @media print {
+              body { padding: 0; }
+              .card { box-shadow: none; border-color: #000; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h1>${(globalSettings?.restaurantName || 'SIYA BILL').toUpperCase()}</h1>
+            <div class="sub">Table ${tableId}</div>
+            <div class="qr-container" id="qrcode"></div>
+            <div class="instructions">Scan QR Code to Order Online</div>
+            <div class="url">${orderUrl}</div>
+          </div>
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+          <script>
+            new QRCode(document.getElementById("qrcode"), {
+              text: "${orderUrl}",
+              width: 180,
+              height: 180,
+              colorDark : "#000000",
+              colorLight : "#ffffff",
+              correctLevel : QRCode.CorrectLevel.H
+            });
+            setTimeout(() => { window.print(); window.close(); }, 500);
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
 
   const handleToggle = (name: keyof typeof formData) => {
     setFormData({ ...formData, [name]: !formData[name] });
@@ -324,6 +420,14 @@ export default function RestaurantSettings() {
                 </span>
               ) : null
             }
+          />
+
+          <SubTabButton
+            active={activeSubTab === 'qr_generator'}
+            onClick={() => setActiveSubTab('qr_generator')}
+            icon={<QrCode size={15} />}
+            label="QR Generator"
+            badge={null}
           />
 
           <SubTabButton
@@ -1074,6 +1178,65 @@ export default function RestaurantSettings() {
                   </div>
                 )}
               </div>
+
+            </div>
+          )}
+
+          {/* TAB 5: QR CODE GENERATOR */}
+          {activeSubTab === 'qr_generator' && (
+            <div className="flex flex-col gap-6 animate-fade-in text-gray-800 dark:text-slate-100">
+              
+              {/* Introduction Card */}
+              <div className="p-6 bg-gradient-to-tr from-indigo-500/[0.02] to-purple-500/[0.005] border border-indigo-500/10 rounded-3xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-sm">
+                <div className="max-w-xl">
+                  <h4 className="font-black text-sm text-gray-850 dark:text-slate-200 tracking-tight">QR Code Self-Ordering</h4>
+                  <p className="text-[11px] text-gray-450 dark:text-slate-500 font-bold mt-1.5 leading-relaxed">
+                    Generate unique QR Codes for your Dine-in tables. Customers can scan the QR code to open your digital menu page on their phone, input the table PIN, and place orders directly from their tables.
+                  </p>
+                </div>
+                {!globalSettings?.restaurantCode && (
+                  <div className="px-3.5 py-2 bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 rounded-xl text-[10px] text-amber-700 dark:text-amber-400 font-bold max-w-xs leading-relaxed">
+                    ⚠️ Please set your Restaurant Code in Profile Settings first to enable QR ordering.
+                  </div>
+                )}
+              </div>
+
+              {/* Printable Table QR Codes Grid */}
+              {globalSettings?.restaurantCode && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                  {tables.map((tbl) => {
+                    const orderUrl = `https://siyabill.vercel.app/order/${globalSettings.restaurantCode}/${tbl.id}`;
+                    return (
+                      <div key={tbl.id} className="bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-800/80 rounded-2xl p-5 flex flex-col items-center gap-4 shadow-sm hover:shadow-md transition-all">
+                        <div className="font-extrabold text-sm text-gray-850 dark:text-slate-100">
+                          Table {tbl.id}
+                        </div>
+                        
+                        <div className="bg-white p-3 rounded-xl border border-gray-100 dark:border-slate-200">
+                          <QRCodeSVG
+                            value={orderUrl}
+                            size={120}
+                            level="H"
+                            includeMargin={false}
+                          />
+                        </div>
+
+                        <div className="text-[10px] font-bold text-gray-450 dark:text-slate-500 truncate max-w-full text-center">
+                          PIN: <span className="font-black text-indigo-600 dark:text-indigo-400">{tbl.tablePin || '---'}</span>
+                        </div>
+
+                        <button
+                          onClick={() => handlePrintQR(tbl.id)}
+                          className="w-full py-2.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/30 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 font-black rounded-xl text-[10px] transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-indigo-200/10"
+                        >
+                          <Printer size={12} />
+                          Print Code
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
             </div>
           )}

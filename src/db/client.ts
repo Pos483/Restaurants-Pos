@@ -103,6 +103,10 @@ localDb.version(5).stores({
   print_queue: 'id, type, status, timestamp'
 });
 
+localDb.version(6).stores({
+  self_orders: 'id, tableId, status'
+});
+
 export function useLiveQuery<T>(
   querier: () => T | Promise<T>,
   deps: any[] = [],

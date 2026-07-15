@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useApp } from './contexts/AppContext';
 import { useTheme } from './contexts/ThemeContext';
 import { useLiveQuery, db } from './db';
@@ -15,6 +15,7 @@ import OrderMenu from './components/OrderMenu';
 import LoginScreen from './components/LoginScreen';
 import ResetPasswordScreen from './components/ResetPasswordScreen';
 import BlockedScreen from './components/BlockedScreen';
+import PublicOrdering from './components/PublicOrdering';
 
 // ── Lazy imports (loaded on first tab visit) ─────────────────────────────────
 const QuickBilling       = lazy(() => import('./components/QuickBilling'));
@@ -46,6 +47,22 @@ export default function App() {
   const [selectedTableId, setSelectedTableId] = useState<number | null>(null);
 
   const tables = useLiveQuery(() => db.activeOrders.toArray(), [], 'active_orders') || [];
+
+  // Automatically assign a random 3-digit PIN to any table that doesn't have one
+  useEffect(() => {
+    tables.forEach(async (t) => {
+      if (!t.tablePin) {
+        try {
+          await db.activeOrders.update(t.id, {
+            tablePin: Math.floor(100 + Math.random() * 900).toString()
+          });
+        } catch (e) {
+          console.error('Failed to set table pin:', e);
+        }
+      }
+    });
+  }, [tables]);
+
   const stockItemsList = useLiveQuery(() => db.stockItems.toArray(), [], 'stock_items') || [];
   const hasLowStock = stockItemsList.some(item => item.quantity < item.minThreshold);
 
@@ -84,7 +101,11 @@ export default function App() {
     }
 
     try {
-      const result = await db.activeOrders.update(tableId, { status: 'available', orders: [] });
+      const result = await db.activeOrders.update(tableId, {
+        status: 'available',
+        orders: [],
+        tablePin: Math.floor(100 + Math.random() * 900).toString()
+      });
       if (!result) {
         console.error('Settle bill: update returned falsy — bill may not have been saved.');
       }
@@ -110,6 +131,21 @@ export default function App() {
           <div className="text-gray-500 dark:text-slate-400 font-bold text-lg">Loading Siya Bill...</div>
         </div>
       </div>
+    );
+  }
+
+  // Check if we are on a customer ordering route: /order/:restaurantCode/:tableId
+  const isOrderPath = window.location.pathname.startsWith('/order/');
+  if (isOrderPath) {
+    const parts = window.location.pathname.split('/').filter(Boolean); // ['order', 'restaurantCode', 'tableId']
+    const restaurantCode = parts[1] || '';
+    const tableId = parts[2] || '';
+    return (
+      <PublicOrdering 
+        restaurantCode={restaurantCode} 
+        tableId={tableId} 
+        isOnline={isOnline}
+      />
     );
   }
 

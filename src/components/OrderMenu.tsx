@@ -251,7 +251,8 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
     await db.activeOrders.add({
       id: newId,
       status: 'available',
-      orders: []
+      orders: [],
+      tablePin: Math.floor(100 + Math.random() * 900).toString()
     });
   };
 

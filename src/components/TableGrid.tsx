@@ -32,6 +32,12 @@ export default function TableGrid({ tables, onSelectTable, onAddTable }: Props) 
                 ? 'bg-orange-500 shadow-sm shadow-orange-400 animate-pulse dark:bg-orange-400'
                 : 'bg-emerald-500 shadow-sm shadow-emerald-400 dark:bg-emerald-400'
             }`} />
+            
+            {table.tablePin && (
+              <div className="absolute top-3 left-3 text-[9px] font-black tracking-wider text-gray-400 dark:text-slate-500 bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-gray-200/20 uppercase">
+                PIN: {table.tablePin}
+              </div>
+            )}
             <div className={`text-xl font-black transition-colors w-full text-center truncate px-2 ${isOccupied ? 'text-orange-600 dark:text-orange-400' : 'text-gray-700 group-hover:text-emerald-600 dark:text-slate-200 dark:group-hover:text-emerald-400'}`}>
               Table {table.id}
             </div>

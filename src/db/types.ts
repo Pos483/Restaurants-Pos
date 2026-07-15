@@ -172,3 +172,14 @@ export interface DBPrintJob {
   record: DBBill | DBKdsOrder;
   attempts?: number;
 }
+
+export interface DBSelfOrder extends BaseDBRecord {
+  id: string;
+  appUserId?: string;
+  tableId: string;
+  customerName: string;
+  customerPhone: string;
+  items: OrderItem[];
+  status: 'pending' | 'approved' | 'rejected';
+  timestamp: number;
+}

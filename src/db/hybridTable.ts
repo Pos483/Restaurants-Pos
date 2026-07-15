@@ -15,7 +15,8 @@ import {
   DBCustomer,
   DBCustomerTransaction,
   DBPosCustomer,
-  DBExpense
+  DBExpense,
+  DBSelfOrder
 } from './types';
 
 export class HybridTable<T extends BaseDBRecord> {
@@ -544,8 +545,15 @@ const restaurantSettingsTable = new HybridTable<DBRestaurantSettings>(
 
 const activeOrdersTable = new HybridTable<Table>(
   'active_orders',
-  (o, uid) => ({ app_user_id: uid, id: o.id, status: o.status, orders: o.orders ?? [], updated_at: new Date().toISOString() }),
-  (r) => ({ id: Number(r.id), status: r.status as any, orders: r.orders ?? [] })
+  (o, uid) => ({ app_user_id: uid, id: o.id, status: o.status, orders: o.orders ?? [], table_pin: o.tablePin ?? null, updated_at: new Date().toISOString() }),
+  (r) => ({ id: Number(r.id), status: r.status as any, orders: r.orders ?? [], tablePin: r.table_pin ?? undefined })
+);
+
+const selfOrdersTable = new HybridTable<DBSelfOrder>(
+  'self_orders',
+  (s, uid) => ({ app_user_id: uid, id: s.id, table_id: s.tableId, customer_name: s.customerName, customer_phone: s.customerPhone, items: s.items, status: s.status, timestamp: s.timestamp }),
+  (r) => ({ id: r.id, tableId: r.table_id, customerName: r.customer_name ?? '', customerPhone: r.customer_phone ?? '', items: r.items ?? [], status: r.status as any, timestamp: Number(r.timestamp) }),
+  true // onlineOnly: true
 );
 
 const stockItemsTable = new HybridTable<DBStockItem>(
@@ -634,6 +642,7 @@ export const db = {
   customerTransactions: customerTransactionsTable,
   expenses: expensesTable,
   posCustomers: posCustomersTable,
+  selfOrders: selfOrdersTable,
   deletedRecords: { add: async () => {}, toArray: async () => [] } as any,
 };
 
@@ -654,6 +663,7 @@ export const getTable = (tableName: string): HybridTable<BaseDBRecord> | undefin
     case 'customer_transactions': return db.customerTransactions as unknown as HybridTable<BaseDBRecord>;
     case 'expenses': return db.expenses as unknown as HybridTable<BaseDBRecord>;
     case 'pos_customers': return db.posCustomers as unknown as HybridTable<BaseDBRecord>;
+    case 'self_orders': return db.selfOrders as unknown as HybridTable<BaseDBRecord>;
     default: return undefined;
   }
 };

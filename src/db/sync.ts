@@ -216,7 +216,8 @@ export const setupRealtime = (userId: string) => {
     'customers',
     'customer_transactions',
     'expenses',
-    'pos_customers'
+    'pos_customers',
+    'self_orders'
   ];
   tables.forEach(table => {
     supabase!.channel(`rt_${table}`)

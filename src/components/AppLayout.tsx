@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   LayoutGrid, Utensils, BookOpen, HelpCircle, Crown, Sun, Moon,
   Zap, LayoutDashboard, BarChart3, Printer, Package, ChefHat, Eye,
   Settings, Store, User as UserIcon, LogOut, CheckCircle2, XCircle,
-  Unplug, AlertTriangle, Megaphone, Users
+  Unplug, AlertTriangle, Megaphone, Users, Bell
 } from 'lucide-react';
-import { db, useLiveQuery } from '../db';
+import { db, useLiveQuery, notifyGlobalChange, getNextKotNumber } from '../db';
 // ThermalPrinter loaded dynamically on button click to keep printer.ts out of initial bundle
 import { useApp } from '../contexts/AppContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -43,6 +43,82 @@ export function AppLayout({
   const { toggleTheme, isDark } = useTheme();
   const [showProfileMenu, setShowProfileMenu] = React.useState(false);
   const [showMobileMenu, setShowMobileMenu] = React.useState(false);
+
+  const [showPendingOrdersModal, setShowPendingOrdersModal] = useState(false);
+  const selfOrders = useLiveQuery(() => db.selfOrders.toArray(), [], 'self_orders') || [];
+  const pendingOrders = selfOrders.filter(o => o.status === 'pending');
+
+  const lastPendingCountRef = useRef(0);
+  
+  useEffect(() => {
+    if (pendingOrders.length > lastPendingCountRef.current) {
+      try {
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(600, audioContext.currentTime);
+        const gainNode = audioContext.createGain();
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.15);
+      } catch (e) {
+        console.warn('Alert sound failed:', e);
+      }
+    }
+    lastPendingCountRef.current = pendingOrders.length;
+  }, [pendingOrders.length]);
+
+  const handleApproveOrder = async (order: any) => {
+    try {
+      // 1. Get the current active table orders
+      const activeTable = await db.activeOrders.get(Number(order.tableId));
+      const existingOrders = activeTable?.orders || [];
+      const mergedOrders = [...existingOrders];
+
+      for (const selfItem of order.items) {
+        const existingItem = mergedOrders.find(o => o.menuItem.id === selfItem.menuItem.id);
+        if (existingItem) {
+          existingItem.quantity += selfItem.quantity;
+        } else {
+          mergedOrders.push(selfItem);
+        }
+      }
+
+      // 2. Update table active orders & status
+      await db.activeOrders.put({
+        id: Number(order.tableId),
+        status: 'occupied',
+        orders: mergedOrders,
+        tablePin: activeTable?.tablePin || Math.floor(100 + Math.random() * 900).toString()
+      } as any);
+
+      // 3. Mark the self order as approved
+      await db.selfOrders.update(order.id, { status: 'approved' });
+
+      // 4. Trigger KOT printing automatically
+      try {
+        const { ThermalPrinter } = await import('../printer');
+        const kotNum = await getNextKotNumber();
+        await ThermalPrinter.printKOT(Number(order.tableId), order.items, kotNum);
+      } catch (printErr) {
+        console.error('KOT auto-print failed:', printErr);
+      }
+
+      notifyGlobalChange('active_orders');
+    } catch (err) {
+      console.error('Failed to approve order:', err);
+    }
+  };
+
+  const handleRejectOrder = async (orderId: string) => {
+    try {
+      await db.selfOrders.update(orderId, { status: 'rejected' });
+    } catch (err) {
+      console.error('Failed to reject order:', err);
+    }
+  };
   const profileMenuRef = React.useRef<HTMLDivElement>(null);
 
   // Close profile dropdown on outside click
@@ -204,6 +280,23 @@ export function AppLayout({
               <Printer size={14} /><span className="hidden md:inline">Connect Printer</span>
             </button>
 
+            {/* Self-Orders Notification Bell */}
+            <button
+              onClick={() => setShowPendingOrdersModal(true)}
+              className="relative p-2 rounded-xl bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 transition-all duration-300 text-gray-600 dark:text-slate-300 hover:text-indigo-500 dark:hover:text-indigo-400 border border-gray-200/50 dark:border-slate-700/50 shadow-sm cursor-pointer"
+              title="Dine-in Self Orders"
+            >
+              <Bell size={16} className={pendingOrders.length > 0 ? 'animate-bounce text-indigo-650 dark:text-indigo-400' : ''} />
+              {pendingOrders.length > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 text-[9px] font-black text-white items-center justify-center">
+                    {pendingOrders.length}
+                  </span>
+                </span>
+              )}
+            </button>
+
             {/* Theme Toggle */}
             <button onClick={toggleTheme} className="p-2 rounded-xl bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 transition-all duration-300 text-gray-600 dark:text-slate-300 hover:text-orange-500 dark:hover:text-orange-400 border border-gray-200/50 dark:border-slate-700/50 shadow-sm" title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
               {isDark ? <Sun size={16} /> : <Moon size={16} />}
@@ -303,6 +396,90 @@ export function AppLayout({
                 <MobileMenuButton icon={<Store size={20} />} label="Profile" active={activeTab === 'profile'} onClick={() => { setActiveTab('profile'); setShowMobileMenu(false); }} />
                 <MobileMenuButton icon={<HelpCircle size={20} />} label="Help" active={activeTab === 'help'} onClick={() => { setActiveTab('help'); setShowMobileMenu(false); }} />
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Dine-in Self Orders Approval Modal */}
+        {showPendingOrdersModal && (
+          <div className="fixed inset-0 bg-black/45 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-800 rounded-3xl w-full max-w-lg overflow-hidden flex flex-col shadow-2xl animate-fade-in text-gray-800 dark:text-slate-100">
+              
+              {/* Modal Header */}
+              <div className="px-6 py-4.5 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-950/20">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-650 dark:text-indigo-400 rounded-xl">
+                    <Bell size={16} className="animate-bounce" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-black text-gray-850 dark:text-slate-200">Dine-in Self Orders</h2>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase mt-0.5 tracking-wider">Pending Cashier Approval</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowPendingOrdersModal(false)}
+                  className="text-xs font-bold text-gray-400 hover:text-gray-650 dark:hover:text-slate-350 cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4 max-h-[30rem] scrollbar-hide">
+                {pendingOrders.length === 0 ? (
+                  <div className="text-center py-12 flex flex-col items-center gap-2">
+                    <CheckCircle2 size={32} className="text-green-500" />
+                    <p className="text-xs font-bold text-gray-400 dark:text-slate-500">All caught up! No pending self orders.</p>
+                  </div>
+                ) : (
+                  pendingOrders.map((ord) => (
+                    <div key={ord.id} className="p-4 bg-slate-50 dark:bg-slate-950/20 border border-gray-150 dark:border-slate-800/80 rounded-2xl flex flex-col gap-3">
+                      <div className="flex justify-between items-center border-b border-gray-100 dark:border-slate-800 pb-2.5">
+                        <div>
+                          <span className="font-extrabold text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30 px-2.5 py-0.5 rounded-full border border-orange-200/20">
+                            Table {ord.tableId}
+                          </span>
+                          <span className="text-[10px] text-gray-400 font-bold ml-2">
+                            {new Date(ord.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <div className="text-[10px] font-black text-gray-500 dark:text-slate-400">
+                          {ord.customerName} ({ord.customerPhone})
+                        </div>
+                      </div>
+
+                      {/* Items List */}
+                      <div className="flex flex-col gap-1.5 pl-1.5">
+                        {ord.items.map((item: any, idx: number) => (
+                          <div key={idx} className="flex justify-between items-center text-[11px] font-bold text-gray-650 dark:text-slate-300">
+                            <span>{item.menuItem?.name || item.name} <span className="text-indigo-650 dark:text-indigo-400 font-black">x{item.quantity}</span></span>
+                            <span>₹{((item.menuItem?.price || item.price || 0) * item.quantity).toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-2.5 mt-2 pt-2.5 border-t border-gray-100 dark:border-slate-800">
+                        <button
+                          onClick={() => handleRejectOrder(ord.id)}
+                          className="flex-1 py-2 bg-red-50 hover:bg-red-100 dark:bg-red-950/10 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 font-extrabold text-[10px] rounded-xl transition-all cursor-pointer flex justify-center items-center gap-1 border border-red-200/10"
+                        >
+                          <XCircle size={12} />
+                          Reject
+                        </button>
+                        <button
+                          onClick={() => handleApproveOrder(ord)}
+                          className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white font-extrabold text-[10px] rounded-xl transition-all cursor-pointer flex justify-center items-center gap-1 shadow-md shadow-green-500/10"
+                        >
+                          <CheckCircle2 size={12} />
+                          Approve & KOT
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
             </div>
           </div>
         )}
