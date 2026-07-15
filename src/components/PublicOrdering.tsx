@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { DBMenuItem, DBCategory } from '../db/types';
 import { Plus, Minus, Search, ShoppingBag, Utensils, CheckCircle, ChevronRight, X, Phone, User } from 'lucide-react';
@@ -36,6 +36,13 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
   const [customerPhone, setCustomerPhone] = useState('');
   const [placingOrder, setPlacingOrder] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
+
+  // Auto-close cart drawer if basket becomes empty
+  useEffect(() => {
+    if (cart.length === 0) {
+      setShowCart(false);
+    }
+  }, [cart]);
 
   // 1. PIN verification
   const handleVerifyPin = async (e: React.FormEvent) => {
@@ -502,7 +509,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
             </div>
 
             {/* Checkout / Contact Form */}
-            <form onSubmit={handlePlaceOrder} className="p-5 border-t border-gray-150 bg-slate-50/50 flex flex-col gap-4.5 shrink-0">
+            <form onSubmit={handlePlaceOrder} className="px-5 pt-4 pb-14 border-t border-gray-150 bg-slate-50/50 flex flex-col gap-4.5 shrink-0">
               <div className="flex flex-col gap-3">
                 <div className="relative">
                   <User size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
