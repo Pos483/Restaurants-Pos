@@ -545,8 +545,8 @@ const restaurantSettingsTable = new HybridTable<DBRestaurantSettings>(
 
 const activeOrdersTable = new HybridTable<Table>(
   'active_orders',
-  (o, uid) => ({ app_user_id: uid, id: o.id, status: o.status, orders: o.orders ?? [], table_pin: o.tablePin ?? null, updated_at: new Date().toISOString() }),
-  (r) => ({ id: Number(r.id), status: r.status as any, orders: r.orders ?? [], tablePin: r.table_pin ?? undefined })
+  (o, uid) => ({ app_user_id: uid, id: o.id, status: o.status, orders: o.orders ?? [], table_pin: o.tablePin ?? null, customer_name: o.customerName ?? null, customer_phone: o.customerPhone ?? null, updated_at: new Date().toISOString() }),
+  (r) => ({ id: Number(r.id), status: r.status as any, orders: r.orders ?? [], tablePin: r.table_pin ?? undefined, customerName: r.customer_name ?? undefined, customerPhone: r.customer_phone ?? undefined })
 );
 
 const selfOrdersTable = new HybridTable<DBSelfOrder>(

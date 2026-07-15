@@ -91,7 +91,9 @@ export function AppLayout({
         id: Number(order.tableId),
         status: 'occupied',
         orders: mergedOrders,
-        tablePin: activeTable?.tablePin || Math.floor(100 + Math.random() * 900).toString()
+        tablePin: activeTable?.tablePin || Math.floor(100 + Math.random() * 900).toString(),
+        customerName: order.customerName || undefined,
+        customerPhone: order.customerPhone || undefined
       } as any);
 
       // 3. Mark the self order as approved

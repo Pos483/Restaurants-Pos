@@ -173,8 +173,12 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
       lastTableIdRef.current = selectedTableId;
       if (table) {
         setLocalOrders(table.orders || []);
+        setCustomerName(table.customerName || '');
+        setCustomerPhone(table.customerPhone || '');
       } else {
         setLocalOrders([]);
+        setCustomerName('');
+        setCustomerPhone('');
       }
     } else if (table) {
       if (pendingUpdateRef.current) return;
@@ -185,15 +189,19 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
       if (localStr !== remoteStr) {
         setLocalOrders(table.orders);
       }
+      if (table.customerName !== undefined && table.customerName !== customerName) {
+        setCustomerName(table.customerName);
+      }
+      if (table.customerPhone !== undefined && table.customerPhone !== customerPhone) {
+        setCustomerPhone(table.customerPhone);
+      }
     }
-  }, [selectedTableId, table, localOrders]);
+  }, [selectedTableId, table, localOrders, customerName, customerPhone]);
 
   // Reset all billing parameters and modal controls on table switch
   useEffect(() => {
     setDiscountAmount('');
     setDiscountType('amount');
-    setCustomerName('');
-    setCustomerPhone('');
     setPaymentMethod('Cash');
     setCreditCustomerName('');
     setCreditCustomerPhone('');
@@ -1046,9 +1054,15 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
         <CustomerModal
           initialName={customerName}
           initialPhone={customerPhone}
-          onSave={(name, phone) => {
+          onSave={async (name, phone) => {
             setCustomerName(name);
             setCustomerPhone(phone);
+            if (table) {
+              await db.activeOrders.update(table.id, {
+                customerName: name,
+                customerPhone: phone
+              });
+            }
             setShowCustomer(false);
           }}
           onClose={() => setShowCustomer(false)}

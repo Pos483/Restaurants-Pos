@@ -25,6 +25,8 @@ export type Table = {
   status: 'available' | 'occupied';
   orders: OrderItem[];
   tablePin?: string;
+  customerName?: string;
+  customerPhone?: string;
 };
 
 export interface AppUser {
