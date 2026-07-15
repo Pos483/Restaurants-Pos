@@ -16,6 +16,7 @@ interface CartItem {
 
 export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Props) {
   const [pin, setPin] = useState('');
+  const [verifiedPin, setVerifiedPin] = useState('');
   const [isVerified, setIsVerified] = useState(false);
   const [pinError, setPinError] = useState('');
   const [verifying, setVerifying] = useState(false);
@@ -63,6 +64,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
 
       if (data === true) {
         setIsVerified(true);
+        setVerifiedPin(pin);
         loadMenuAndCategories();
       } else {
         setPinError('Invalid PIN! Please ask the waiter for the correct code.');
@@ -171,6 +173,32 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
 
     if (!supabase) {
       alert('Database connection unavailable.');
+      setPlacingOrder(false);
+      return;
+    }
+
+    // Verify PIN again before placing the order to prevent ordering after session ends (bill settlement)
+    try {
+      const { data: isPinStillValid, error: pinCheckError } = await supabase.rpc('verify_table_pin', {
+        p_restaurant_code: restaurantCode,
+        p_table_id: tableId,
+        p_pin: verifiedPin
+      });
+
+      if (pinCheckError) throw pinCheckError;
+
+      if (isPinStillValid !== true) {
+        alert('This dining session has ended. Please scan the QR code again or ask the waiter for the new table PIN.');
+        setIsVerified(false);
+        setVerifiedPin('');
+        setPin('');
+        setCart([]);
+        setPlacingOrder(false);
+        return;
+      }
+    } catch (err) {
+      console.error('Pre-order PIN verification failed:', err);
+      alert('Security verification failed. Please try again.');
       setPlacingOrder(false);
       return;
     }
