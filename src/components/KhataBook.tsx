@@ -229,7 +229,7 @@ export default function KhataBook() {
               placeholder="Search by name or phone..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-3 bg-gray-50/60 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl text-xs font-bold focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20 text-gray-800 dark:text-slate-200"
+              className="w-full pl-10 pr-4 py-3 bg-gray-50/60 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl text-xs font-bold focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20 text-gray-800 dark:text-slate-200"
             />
           </div>
         </div>

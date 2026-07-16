@@ -205,7 +205,7 @@ export default function Customers() {
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input ref={searchRef} type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or phone…" className="w-full pl-9 pr-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl text-sm font-medium bg-white dark:bg-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500" />
+          <input ref={searchRef} type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or phone…" className="w-full pl-10 pr-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl text-sm font-medium bg-white dark:bg-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500" />
         </div>
         <select title="Filter by tag" value={filterTag} onChange={e => setFilterTag(e.target.value)} className="px-3 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl text-sm font-bold bg-white dark:bg-slate-900 dark:text-slate-100 focus:outline-none">
           <option value="">All Tags</option>

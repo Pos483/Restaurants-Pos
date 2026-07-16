@@ -758,7 +758,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
                         placeholder="Enter Your Name"
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2.5 !bg-white !text-gray-800 !border-gray-200 rounded-2xl text-xs focus:outline-none focus:border-orange-500 font-bold focus:ring-1 focus:ring-orange-500/20 placeholder:text-gray-400"
+                        className="w-full pl-10 pr-4 py-2.5 !bg-white !text-gray-800 !border-gray-200 rounded-2xl text-xs focus:outline-none focus:border-orange-500 font-bold focus:ring-1 focus:ring-orange-500/20 placeholder:text-gray-400"
                       />
                     </div>
 
@@ -772,7 +772,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
                         placeholder="10-Digit Mobile Number"
                         value={customerPhone}
                         onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, ''))}
-                        className="w-full pl-9 pr-4 py-2.5 !bg-white !text-gray-800 !border-gray-200 rounded-2xl text-xs focus:outline-none focus:border-orange-500 font-bold focus:ring-1 focus:ring-orange-500/20 placeholder:text-gray-400"
+                        className="w-full pl-10 pr-4 py-2.5 !bg-white !text-gray-800 !border-gray-200 rounded-2xl text-xs focus:outline-none focus:border-orange-500 font-bold focus:ring-1 focus:ring-orange-500/20 placeholder:text-gray-400"
                       />
                     </div>
 
@@ -785,7 +785,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
                           placeholder="Complete Delivery Address (with landmarks)"
                           value={deliveryAddress}
                           onChange={(e) => setDeliveryAddress(e.target.value)}
-                          className="w-full pl-9 pr-4 py-2.5 !bg-white !text-gray-800 !border-gray-200 rounded-2xl text-xs focus:outline-none focus:border-orange-500 font-bold focus:ring-1 focus:ring-orange-500/20 resize-none placeholder:text-gray-400"
+                          className="w-full pl-10 pr-4 py-2.5 !bg-white !text-gray-800 !border-gray-200 rounded-2xl text-xs focus:outline-none focus:border-orange-500 font-bold focus:ring-1 focus:ring-orange-500/20 resize-none placeholder:text-gray-400"
                         />
                       </div>
                     )}
@@ -799,7 +799,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
                           placeholder="Takeaway Time (e.g. 20 Mins, 8:30 PM)"
                           value={pickupTime}
                           onChange={(e) => setPickupTime(e.target.value)}
-                          className="w-full pl-9 pr-4 py-2.5 !bg-white !text-gray-800 !border-gray-200 rounded-2xl text-xs focus:outline-none focus:border-orange-500 font-bold focus:ring-1 focus:ring-orange-500/20 placeholder:text-gray-400"
+                          className="w-full pl-10 pr-4 py-2.5 !bg-white !text-gray-800 !border-gray-200 rounded-2xl text-xs focus:outline-none focus:border-orange-500 font-bold focus:ring-1 focus:ring-orange-500/20 placeholder:text-gray-400"
                         />
                       </div>
                     )}
