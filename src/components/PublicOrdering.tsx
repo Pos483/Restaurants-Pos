@@ -492,13 +492,13 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
       {/* Dynamic Gradient Header */}
       <header className="bg-gradient-to-r from-slate-900 via-slate-850 to-indigo-950 px-5 py-4 flex justify-between items-center shrink-0 shadow-md relative">
         <div className="absolute inset-0 bg-gradient-to-r from-orange-500/10 to-rose-500/10 pointer-events-none" />
-        <div className="relative z-10 min-w-0 pr-4">
-          <h1 className="text-base font-black text-white leading-tight truncate">{restaurantName}</h1>
+        <div className="relative z-10 min-w-0 flex-1 pr-2">
+          <h1 className="text-[15px] font-black text-white leading-snug truncate">{restaurantName}</h1>
           <p className="text-[9px] text-orange-400 font-black uppercase mt-0.5 tracking-widest">
             {tableId ? `Table ${tableId}` : 'Online Ordering'}
           </p>
         </div>
-        <div className="relative z-10 flex items-center gap-1.5 text-[9px] font-black uppercase text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full shadow-sm">
+        <div className="relative z-10 shrink-0 flex items-center gap-1.5 text-[9px] font-black uppercase text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full shadow-sm whitespace-nowrap">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live Session
         </div>
       </header>
