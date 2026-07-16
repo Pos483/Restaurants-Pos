@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '../supabase';
 import { DBMenuItem, DBCategory } from '../db/types';
-import { Plus, Minus, Search, ShoppingBag, Utensils, CheckCircle, ChevronRight, Phone, User, Globe, XCircle, MapPin, Clock } from 'lucide-react';
+import { Plus, Minus, Search, ShoppingBag, Utensils, CheckCircle, ChevronRight, Globe, XCircle } from 'lucide-react';
 
 interface Props {
   restaurantCode: string;
@@ -751,19 +751,17 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
                     )}
 
                     <div className="relative">
-                      <User size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         type="text"
                         required
                         placeholder="Enter Your Name"
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2.5 !bg-white !text-gray-800 !border-gray-200 rounded-2xl text-xs focus:outline-none focus:border-orange-500 font-bold focus:ring-1 focus:ring-orange-500/20 placeholder:text-gray-400"
+                        className="w-full px-4 py-2.5 !bg-white !text-gray-800 !border-gray-200 rounded-2xl text-xs focus:outline-none focus:border-orange-500 font-bold focus:ring-1 focus:ring-orange-500/20 placeholder:text-gray-400"
                       />
                     </div>
 
                     <div className="relative">
-                      <Phone size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         type="text"
                         inputMode="numeric"
@@ -772,34 +770,32 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
                         placeholder="10-Digit Mobile Number"
                         value={customerPhone}
                         onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, ''))}
-                        className="w-full pl-10 pr-4 py-2.5 !bg-white !text-gray-800 !border-gray-200 rounded-2xl text-xs focus:outline-none focus:border-orange-500 font-bold focus:ring-1 focus:ring-orange-500/20 placeholder:text-gray-400"
+                        className="w-full px-4 py-2.5 !bg-white !text-gray-800 !border-gray-200 rounded-2xl text-xs focus:outline-none focus:border-orange-500 font-bold focus:ring-1 focus:ring-orange-500/20 placeholder:text-gray-400"
                       />
                     </div>
 
                     {!tableId && orderType === 'delivery' && (
                       <div className="relative">
-                        <MapPin size={13} className="absolute left-3.5 top-3 text-gray-400" />
                         <textarea
                           required
                           rows={2}
                           placeholder="Complete Delivery Address (with landmarks)"
                           value={deliveryAddress}
                           onChange={(e) => setDeliveryAddress(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2.5 !bg-white !text-gray-800 !border-gray-200 rounded-2xl text-xs focus:outline-none focus:border-orange-500 font-bold focus:ring-1 focus:ring-orange-500/20 resize-none placeholder:text-gray-400"
+                          className="w-full px-4 py-2.5 !bg-white !text-gray-800 !border-gray-200 rounded-2xl text-xs focus:outline-none focus:border-orange-500 font-bold focus:ring-1 focus:ring-orange-500/20 resize-none placeholder:text-gray-400"
                         />
                       </div>
                     )}
 
                     {!tableId && orderType === 'takeaway' && (
                       <div className="relative">
-                        <Clock size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input
                           type="text"
                           required
                           placeholder="Takeaway Time (e.g. 20 Mins, 8:30 PM)"
                           value={pickupTime}
                           onChange={(e) => setPickupTime(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2.5 !bg-white !text-gray-800 !border-gray-200 rounded-2xl text-xs focus:outline-none focus:border-orange-500 font-bold focus:ring-1 focus:ring-orange-500/20 placeholder:text-gray-400"
+                          className="w-full px-4 py-2.5 !bg-white !text-gray-800 !border-gray-200 rounded-2xl text-xs focus:outline-none focus:border-orange-500 font-bold focus:ring-1 focus:ring-orange-500/20 placeholder:text-gray-400"
                         />
                       </div>
                     )}
