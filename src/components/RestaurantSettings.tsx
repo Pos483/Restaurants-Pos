@@ -21,7 +21,8 @@ import {
   QrCode,
   Cloud,
   Database,
-  Upload
+  Upload,
+  Copy
 } from 'lucide-react';
 import { ThermalPrinter } from '../printer';
 import { useToast } from './Toast';
@@ -78,6 +79,7 @@ export default function RestaurantSettings() {
     return { ...(profile || {}), ...(sys || {}) };
   }, [], ['restaurant_profile', 'restaurant_settings']);
   const tables = useLiveQuery(() => db.activeOrders.toArray(), [], 'active_orders') || [];
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const [formData, setFormData] = useState({
     printPhone: true,
@@ -303,6 +305,103 @@ export default function RestaurantSettings() {
                 <img src="${qrDataUrl}" width="200" height="200" alt="QR Code" />
               </div>
               <div class="instructions">Scan QR Code to Order Online</div>
+              <div class="url">${orderUrl}</div>
+            </div>
+            <script>
+              setTimeout(() => { window.print(); window.close(); }, 500);
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    } catch (err) {
+      console.error('Failed to generate QR Code:', err);
+      showToast('Failed to generate QR Code.', 'error');
+    }
+  };
+
+  const handlePrintOnlineQR = async () => {
+    const restaurantCode = globalSettings?.restaurantCode || '';
+    if (!restaurantCode) {
+      showToast('Please set your Restaurant Code in Profile Settings first.', 'error');
+      return;
+    }
+    const orderUrl = `${window.location.origin}/?r=${restaurantCode}`;
+    
+    try {
+      const QRCode = (await import('qrcode')).default;
+      const qrDataUrl = await QRCode.toDataURL(orderUrl, { margin: 1, width: 250 });
+      
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) return;
+
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Print QR Code - Online Orders</title>
+            <style>
+              body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                text-align: center;
+                padding: 40px;
+                color: #333;
+              }
+              .card {
+                border: 3px solid #f97316;
+                border-radius: 24px;
+                padding: 40px 20px;
+                max-width: 320px;
+                margin: 0 auto;
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+              }
+              h1 {
+                font-size: 26px;
+                font-weight: 900;
+                margin: 0 0 5px 0;
+                color: #1e293b;
+              }
+              .sub {
+                font-size: 16px;
+                font-weight: 800;
+                color: #f97316;
+                text-transform: uppercase;
+                letter-spacing: 2px;
+                margin-bottom: 25px;
+              }
+              .qr-container {
+                background: #fff;
+                padding: 15px;
+                display: inline-block;
+                border-radius: 16px;
+                border: 1px solid #e2e8f0;
+                margin-bottom: 25px;
+              }
+              .instructions {
+                font-size: 14px;
+                font-weight: 800;
+                color: #475569;
+                margin-bottom: 5px;
+              }
+              .url {
+                font-size: 10px;
+                font-weight: 600;
+                color: #94a3b8;
+                word-break: break-all;
+              }
+              @media print {
+                body { padding: 0; }
+                .card { box-shadow: none; border-color: #000; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <h1>${(globalSettings?.restaurantName || 'SIYA BILL').toUpperCase()}</h1>
+              <div class="sub">Online Delivery</div>
+              <div class="qr-container">
+                <img src="${qrDataUrl}" width="200" height="200" alt="QR Code" />
+              </div>
+              <div class="instructions">Scan to Order Online (Home Delivery / Takeaway)</div>
               <div class="url">${orderUrl}</div>
             </div>
             <script>
@@ -1202,12 +1301,71 @@ export default function RestaurantSettings() {
                   </div>
                 )}
               </div>
+ 
+              {/* Online Ordering Link & QR Generator Card */}
+              {globalSettings?.restaurantCode && (
+                <div className="p-6 bg-orange-50/40 dark:bg-slate-900 border border-orange-100 dark:border-slate-800/80 rounded-3xl flex flex-col md:flex-row gap-6 items-center shadow-sm">
+                  {/* Left Side: QR Code */}
+                  <div className="bg-white p-3.5 rounded-2xl border border-gray-150 shadow-inner shrink-0">
+                    <QRCodeSVG
+                      value={`${window.location.origin}/?r=${globalSettings.restaurantCode}`}
+                      size={120}
+                      level="H"
+                      includeMargin={false}
+                    />
+                  </div>
+
+                  {/* Right Side: Copy Link Details */}
+                  <div className="flex-1 flex flex-col gap-3.5 w-full">
+                    <div>
+                      <span className="px-2.5 py-0.5 bg-orange-100/60 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400 rounded-full text-[9px] font-black uppercase tracking-wider border border-orange-200/20">
+                        Public Online Menu
+                      </span>
+                      <h4 className="font-black text-sm text-gray-850 dark:text-slate-100 tracking-tight mt-1.5">
+                        Restaurant Online Ordering Link & QR
+                      </h4>
+                      <p className="text-[10.5px] text-gray-400 dark:text-slate-500 font-bold mt-1 leading-relaxed">
+                        Share this link or print this QR Code for home delivery or takeaway orders. Customers can scan to order directly from home!
+                      </p>
+                    </div>
+
+                    {/* Copy Link Input group */}
+                    <div className="flex flex-col sm:flex-row gap-2 max-w-lg w-full">
+                      <div className="flex-1 px-4 py-2.5 bg-slate-100 dark:bg-slate-950 rounded-xl border border-gray-150 dark:border-slate-850 text-xs font-bold text-gray-500 dark:text-slate-400 select-all truncate">
+                        {`${window.location.origin}/?r=${globalSettings.restaurantCode}`}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(`${window.location.origin}/?r=${globalSettings.restaurantCode}`);
+                            setCopiedLink(true);
+                            setTimeout(() => setCopiedLink(false), 2000);
+                          }}
+                          className="px-4 py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-50 text-gray-700 dark:text-slate-200 font-bold text-xs rounded-xl transition-colors border border-gray-200/60 dark:border-slate-700/60 cursor-pointer shadow-xs flex items-center gap-1.5 active:scale-95 shrink-0"
+                        >
+                          {copiedLink ? <CheckCircle2 size={14} className="text-green-600" /> : <Copy size={14} />}
+                          {copiedLink ? 'Copied' : 'Copy Link'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handlePrintOnlineQR}
+                          className="px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-sm shadow-orange-500/10 flex items-center gap-1.5 active:scale-95 shrink-0 border border-white/5"
+                        >
+                          <Printer size={14} />
+                          Print QR Code
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Printable Table QR Codes Grid */}
               {globalSettings?.restaurantCode && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                   {tables.map((tbl) => {
-                    const orderUrl = `https://siyabill.vercel.app/?r=${globalSettings.restaurantCode}&t=${tbl.id}`;
+                    const orderUrl = `${window.location.origin}/?r=${globalSettings.restaurantCode}&t=${tbl.id}`;
                     return (
                       <div key={tbl.id} className="bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-800/80 rounded-2xl p-5 flex flex-col items-center gap-4 shadow-sm hover:shadow-md transition-all">
                         <div className="font-extrabold text-sm text-gray-850 dark:text-slate-100">
