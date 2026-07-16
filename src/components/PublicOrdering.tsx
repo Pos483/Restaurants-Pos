@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '../supabase';
 import { DBMenuItem, DBCategory } from '../db/types';
 import { Plus, Minus, Search, ShoppingBag, Utensils, CheckCircle, ChevronRight, X, Phone, User } from 'lucide-react';
@@ -17,9 +18,14 @@ interface CartItem {
 export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Props) {
   const [pin, setPin] = useState('');
   const [verifiedPin, setVerifiedPin] = useState('');
-  const [isVerified, setIsVerified] = useState(false);
+  const [isVerified, setIsVerified] = useState(!tableId);
   const [pinError, setPinError] = useState('');
   const [verifying, setVerifying] = useState(false);
+
+  const [restaurantUpiId, setRestaurantUpiId] = useState('');
+  const [orderType, setOrderType] = useState<'delivery' | 'takeaway'>('delivery');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [pickupTime, setPickupTime] = useState('');
 
   const [restaurantName, setRestaurantName] = useState('Siya Bill');
   const [tenantId, setTenantId] = useState('');
@@ -43,6 +49,13 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
       setShowCart(false);
     }
   }, [cart]);
+
+  // Load menu automatically if verified
+  useEffect(() => {
+    if (isVerified) {
+      loadMenuAndCategories();
+    }
+  }, [isVerified]);
 
   // 1. PIN verification
   const handleVerifyPin = async (e: React.FormEvent) => {
@@ -91,7 +104,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
     try {
       const { data: profile, error: profileErr } = await supabase
         .from('restaurant_profile')
-        .select('app_user_id, restaurant_name')
+        .select('app_user_id, restaurant_name, upi_id, upi_enabled')
         .eq('restaurant_code', restaurantCode)
         .single();
 
@@ -99,6 +112,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
       
       setRestaurantName(profile.restaurant_name || 'Restaurant');
       setTenantId(profile.app_user_id);
+      setRestaurantUpiId(profile.upi_id || '');
 
       const [menuRes, catRes] = await Promise.all([
         supabase
@@ -184,53 +198,94 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
       return;
     }
 
-    // Verify PIN again before placing the order to prevent ordering after session ends (bill settlement)
-    try {
-      const { data: isPinStillValid, error: pinCheckError } = await supabase.rpc('verify_table_pin', {
-        p_restaurant_code: restaurantCode,
-        p_table_id: tableId,
-        p_pin: verifiedPin
-      });
+    if (tableId) {
+      // Verify PIN again before placing the order to prevent ordering after session ends (bill settlement)
+      try {
+        const { data: isPinStillValid, error: pinCheckError } = await supabase.rpc('verify_table_pin', {
+          p_restaurant_code: restaurantCode,
+          p_table_id: tableId,
+          p_pin: verifiedPin
+        });
 
-      if (pinCheckError) throw pinCheckError;
+        if (pinCheckError) throw pinCheckError;
 
-      if (isPinStillValid !== true) {
-        alert('This dining session has ended. Please scan the QR code again or ask the waiter for the new table PIN.');
-        setIsVerified(false);
-        setVerifiedPin('');
-        setPin('');
-        setCart([]);
+        if (isPinStillValid !== true) {
+          alert('This dining session has ended. Please scan the QR code again or ask the waiter for the new table PIN.');
+          setIsVerified(false);
+          setVerifiedPin('');
+          setPin('');
+          setCart([]);
+          setPlacingOrder(false);
+          return;
+        }
+      } catch (err) {
+        console.error('Pre-order PIN verification failed:', err);
+        alert('Security verification failed. Please try again.');
         setPlacingOrder(false);
         return;
       }
-    } catch (err) {
-      console.error('Pre-order PIN verification failed:', err);
-      alert('Security verification failed. Please try again.');
-      setPlacingOrder(false);
-      return;
     }
 
     try {
-      const { error } = await supabase.from('self_orders').insert({
-        app_user_id: tenantId,
-        table_id: tableId,
-        customer_name: customerName,
-        customer_phone: customerPhone,
-        items: cart.map(item => ({
-          menuItem: {
-            id: item.menuItem.id,
-            name: item.menuItem.name,
-            price: item.menuItem.price,
-            category: item.menuItem.category,
-            printerTarget: item.menuItem.printerTarget || 'kitchen'
-          },
-          quantity: item.quantity
-        })),
-        status: 'pending',
-        timestamp: Date.now()
-      });
+      if (tableId) {
+        const { error } = await supabase.from('self_orders').insert({
+          app_user_id: tenantId,
+          table_id: tableId,
+          customer_name: customerName,
+          customer_phone: customerPhone,
+          items: cart.map(item => ({
+            menuItem: {
+              id: item.menuItem.id,
+              name: item.menuItem.name,
+              price: item.menuItem.price,
+              category: item.menuItem.category,
+              printerTarget: item.menuItem.printerTarget || 'kitchen'
+            },
+            quantity: item.quantity
+          })),
+          status: 'pending',
+          timestamp: Date.now()
+        });
 
-      if (error) throw error;
+        if (error) throw error;
+      } else {
+        // Enforce validations for online order types
+        if (orderType === 'delivery' && !deliveryAddress.trim()) {
+          alert('Please enter a delivery address.');
+          setPlacingOrder(false);
+          return;
+        }
+        if (orderType === 'takeaway' && !pickupTime.trim()) {
+          alert('Please enter your pickup time.');
+          setPlacingOrder(false);
+          return;
+        }
+
+        const { error } = await supabase.from('online_orders').insert({
+          app_user_id: tenantId,
+          customer_name: customerName,
+          customer_phone: customerPhone,
+          order_type: orderType,
+          delivery_address: orderType === 'delivery' ? deliveryAddress.trim() : null,
+          pickup_time: orderType === 'takeaway' ? pickupTime.trim() : null,
+          payment_method: 'UPI',
+          payment_status: 'pending', // cashier verifies soundbox receipt before approving
+          items: cart.map(item => ({
+            menuItem: {
+              id: item.menuItem.id,
+              name: item.menuItem.name,
+              price: item.menuItem.price,
+              category: item.menuItem.category,
+              printerTarget: item.menuItem.printerTarget || 'kitchen'
+            },
+            quantity: item.quantity
+          })),
+          status: 'pending',
+          timestamp: Date.now()
+        });
+
+        if (error) throw error;
+      }
 
       setOrderSuccess(true);
       setCart([]);
@@ -509,8 +564,33 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
             </div>
 
             {/* Checkout / Contact Form */}
-            <form onSubmit={handlePlaceOrder} className="px-5 pt-4 pb-14 border-t border-gray-150 bg-slate-50/50 flex flex-col gap-4.5 shrink-0">
+            <form onSubmit={handlePlaceOrder} className="px-5 pt-4 pb-14 border-t border-gray-150 bg-slate-50/50 flex flex-col gap-4.5 shrink-0 overflow-y-auto max-h-[60vh] scrollbar-hide">
               <div className="flex flex-col gap-3">
+                
+                {/* 1. Toggle between Delivery and Takeaway (Online Mode only) */}
+                {!tableId && (
+                  <div className="flex gap-2 p-1 bg-slate-100 rounded-xl mb-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setOrderType('delivery')}
+                      className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                        orderType === 'delivery' ? 'bg-white text-gray-800 shadow-xs' : 'text-gray-400 hover:text-gray-600'
+                      }`}
+                    >
+                      Home Delivery
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOrderType('takeaway')}
+                      className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                        orderType === 'takeaway' ? 'bg-white text-gray-800 shadow-xs' : 'text-gray-400 hover:text-gray-600'
+                      }`}
+                    >
+                      Self Takeaway
+                    </button>
+                  </div>
+                )}
+
                 <div className="relative">
                   <User size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
@@ -534,6 +614,65 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
                     className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-150 rounded-2xl text-xs focus:outline-none focus:border-orange-500 font-bold focus:ring-1 focus:ring-orange-500/20"
                   />
                 </div>
+
+                {/* 2. Address / Pickup Time fields */}
+                {!tableId && orderType === 'delivery' && (
+                  <div className="relative">
+                    <textarea
+                      required
+                      placeholder="Complete Delivery Address (with landmarks)"
+                      value={deliveryAddress}
+                      onChange={(e) => setDeliveryAddress(e.target.value)}
+                      rows={2}
+                      className="w-full px-4 py-2.5 bg-white border border-gray-150 rounded-2xl text-xs focus:outline-none focus:border-orange-500 font-bold focus:ring-1 focus:ring-orange-500/20"
+                    />
+                  </div>
+                )}
+                {!tableId && orderType === 'takeaway' && (
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Takeaway Time (e.g. 20 Mins, 8:30 PM)"
+                      value={pickupTime}
+                      onChange={(e) => setPickupTime(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-white border border-gray-150 rounded-2xl text-xs focus:outline-none focus:border-orange-500 font-bold focus:ring-1 focus:ring-orange-500/20"
+                    />
+                  </div>
+                )}
+
+                {/* 3. Direct UPI Payment QR & Intent Link */}
+                {!tableId && (
+                  <div className="bg-orange-50/45 border border-orange-100/50 rounded-2xl p-4 flex flex-col gap-3 my-1">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black text-orange-850 uppercase tracking-wider">Pay Online via UPI</span>
+                      <span className="text-[8px] text-emerald-600 bg-emerald-100/40 px-2 py-0.5 rounded-full font-black uppercase">Zero Extra Charges</span>
+                    </div>
+
+                    <div className="flex flex-col gap-2.5 items-center justify-center">
+                      {/* Dynamic Intent Link for Mobile (highly ergonomic click and pay) */}
+                      <a
+                        href={`upi://pay?pa=${restaurantUpiId || '8677994666@upi'}&pn=${encodeURIComponent(restaurantName)}&am=${cartSubtotal}&cu=INR`}
+                        className="w-full py-3 bg-gradient-to-r from-indigo-650 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white text-center rounded-2xl text-[10px] font-extrabold uppercase tracking-wider shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5 border border-indigo-500/10 cursor-pointer"
+                      >
+                        ⚡ Open GPay / PhonePe / Paytm
+                      </a>
+
+                      {/* QR Code for Desktop (Scan and pay) */}
+                      <div className="hidden sm:block p-2 bg-white rounded-xl border border-gray-150 shadow-inner mt-1">
+                        <QRCodeSVG
+                          value={`upi://pay?pa=${restaurantUpiId || '8677994666@upi'}&pn=${encodeURIComponent(restaurantName)}&am=${cartSubtotal}&cu=INR`}
+                          size={110}
+                          level="H"
+                        />
+                      </div>
+
+                      <p className="text-[8.5px] text-slate-400 font-bold text-center leading-relaxed max-w-[240px]">
+                        Pay using the UPI button above. Once done, click the "Place Prepaid Order" button below to complete.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-between items-center text-xs font-black text-gray-800 border-t border-gray-200/50 pt-3">
@@ -548,7 +687,9 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
               >
                 {placingOrder ? (
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : 'Place Order & Send to Kitchen'}
+                ) : (
+                  tableId ? 'Place Order & Send to Kitchen' : 'Place Prepaid Order'
+                )}
               </button>
             </form>
 

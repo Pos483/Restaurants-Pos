@@ -139,7 +139,7 @@ export default function App() {
   const qRestaurantCode = urlParams.get('r') || '';
   const qTableId = urlParams.get('t') || '';
 
-  if (qRestaurantCode && qTableId) {
+  if (qRestaurantCode) {
     return (
       <PublicOrdering 
         restaurantCode={qRestaurantCode} 
@@ -154,8 +154,9 @@ export default function App() {
     const parts = window.location.pathname.split('/').filter(Boolean); // ['order', 'restaurantCode', 'tableId']
     const restaurantCode = parts[1] || '';
     const tableId = parts[2] || '';
-    if (restaurantCode && tableId) {
-      window.location.replace(`/?r=${restaurantCode}&t=${tableId}`);
+    if (restaurantCode) {
+      const redirectUrl = tableId ? `/?r=${restaurantCode}&t=${tableId}` : `/?r=${restaurantCode}`;
+      window.location.replace(redirectUrl);
       return null;
     }
   }
