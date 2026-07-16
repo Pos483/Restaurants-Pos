@@ -221,99 +221,101 @@ export default function RestaurantSettings() {
       showToast('Update check is only available in the installed application.', 'info');
     }
   };
-  const handlePrintQR = (tableId: number) => {
+  const handlePrintQR = async (tableId: number) => {
     const restaurantCode = globalSettings?.restaurantCode || '';
     if (!restaurantCode) {
       showToast('Please set your Restaurant Code in Profile Settings first.', 'error');
       return;
     }
     const orderUrl = `https://siyabill.vercel.app/?r=${restaurantCode}&t=${tableId}`;
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
+    
+    try {
+      const QRCode = (await import('qrcode')).default;
+      const qrDataUrl = await QRCode.toDataURL(orderUrl, { margin: 1, width: 250 });
+      
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) return;
 
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Print QR Code - Table ${tableId}</title>
-          <style>
-            body {
-              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-              text-align: center;
-              padding: 40px;
-              color: #333;
-            }
-            .card {
-              border: 3px solid #f97316;
-              border-radius: 24px;
-              padding: 40px 20px;
-              max-width: 320px;
-              margin: 0 auto;
-              box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-            }
-            h1 {
-              font-size: 26px;
-              font-weight: 900;
-              margin: 0 0 5px 0;
-              color: #1e293b;
-            }
-            .sub {
-              font-size: 16px;
-              font-weight: 800;
-              color: #f97316;
-              text-transform: uppercase;
-              letter-spacing: 2px;
-              margin-bottom: 25px;
-            }
-            .qr-container {
-              background: #fff;
-              padding: 15px;
-              display: inline-block;
-              border-radius: 16px;
-              border: 1px solid #e2e8f0;
-              margin-bottom: 25px;
-            }
-            .instructions {
-              font-size: 14px;
-              font-weight: 800;
-              color: #475569;
-              margin-bottom: 5px;
-            }
-            .url {
-              font-size: 10px;
-              font-weight: 600;
-              color: #94a3b8;
-              word-break: break-all;
-            }
-            @media print {
-              body { padding: 0; }
-              .card { box-shadow: none; border-color: #000; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="card">
-            <h1>${(globalSettings?.restaurantName || 'SIYA BILL').toUpperCase()}</h1>
-            <div class="sub">Table ${tableId}</div>
-            <div class="qr-container" id="qrcode"></div>
-            <div class="instructions">Scan QR Code to Order Online</div>
-            <div class="url">${orderUrl}</div>
-          </div>
-          <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-          <script>
-            new QRCode(document.getElementById("qrcode"), {
-              text: "${orderUrl}",
-              width: 180,
-              height: 180,
-              colorDark : "#000000",
-              colorLight : "#ffffff",
-              correctLevel : QRCode.CorrectLevel.H
-            });
-            setTimeout(() => { window.print(); window.close(); }, 500);
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Print QR Code - Table ${tableId}</title>
+            <style>
+              body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                text-align: center;
+                padding: 40px;
+                color: #333;
+              }
+              .card {
+                border: 3px solid #f97316;
+                border-radius: 24px;
+                padding: 40px 20px;
+                max-width: 320px;
+                margin: 0 auto;
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+              }
+              h1 {
+                font-size: 26px;
+                font-weight: 900;
+                margin: 0 0 5px 0;
+                color: #1e293b;
+              }
+              .sub {
+                font-size: 16px;
+                font-weight: 800;
+                color: #f97316;
+                text-transform: uppercase;
+                letter-spacing: 2px;
+                margin-bottom: 25px;
+              }
+              .qr-container {
+                background: #fff;
+                padding: 15px;
+                display: inline-block;
+                border-radius: 16px;
+                border: 1px solid #e2e8f0;
+                margin-bottom: 25px;
+              }
+              .instructions {
+                font-size: 14px;
+                font-weight: 800;
+                color: #475569;
+                margin-bottom: 5px;
+              }
+              .url {
+                font-size: 10px;
+                font-weight: 600;
+                color: #94a3b8;
+                word-break: break-all;
+              }
+              @media print {
+                body { padding: 0; }
+                .card { box-shadow: none; border-color: #000; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <h1>${(globalSettings?.restaurantName || 'SIYA BILL').toUpperCase()}</h1>
+              <div class="sub">Table ${tableId}</div>
+              <div class="qr-container">
+                <img src="${qrDataUrl}" width="200" height="200" alt="QR Code" />
+              </div>
+              <div class="instructions">Scan QR Code to Order Online</div>
+              <div class="url">${orderUrl}</div>
+            </div>
+            <script>
+              setTimeout(() => { window.print(); window.close(); }, 500);
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    } catch (err) {
+      console.error('Failed to generate QR Code:', err);
+      showToast('Failed to generate QR Code.', 'error');
+    }
   };
 
   const handleToggle = (name: keyof typeof formData) => {
