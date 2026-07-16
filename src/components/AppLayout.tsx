@@ -3,7 +3,7 @@ import {
   LayoutGrid, Utensils, BookOpen, HelpCircle, Crown, Sun, Moon,
   Zap, LayoutDashboard, BarChart3, Printer, Package, ChefHat, Eye,
   Settings, Store, User as UserIcon, LogOut, CheckCircle2, XCircle,
-  Unplug, AlertTriangle, Megaphone, Users, Bell
+  Unplug, AlertTriangle, Megaphone, Users, Bell, Globe
 } from 'lucide-react';
 import { db, useLiveQuery, notifyGlobalChange, getNextKotNumber } from '../db';
 // ThermalPrinter loaded dynamically on button click to keep printer.ts out of initial bundle
@@ -48,27 +48,52 @@ export function AppLayout({
   const selfOrders = useLiveQuery(() => db.selfOrders.toArray(), [], 'self_orders') || [];
   const pendingOrders = selfOrders.filter(o => o.status === 'pending');
 
+  const [showOnlineOrdersModal, setShowOnlineOrdersModal] = useState(false);
+  const [onlineTab, setOnlineTab] = useState<'pending' | 'active'>('pending');
+  const onlineOrders = useLiveQuery(() => db.onlineOrders.toArray(), [], 'online_orders') || [];
+  const pendingOnlineOrders = onlineOrders.filter(o => o.status === 'pending');
+  const activeOnlineOrders = onlineOrders.filter(o => ['accepted', 'preparing', 'dispatched'].includes(o.status));
+
   const lastPendingCountRef = useRef(0);
+  const lastOnlinePendingCountRef = useRef(0);
   
   useEffect(() => {
-    if (pendingOrders.length > lastPendingCountRef.current) {
+    const totalNewOrders = pendingOrders.length + pendingOnlineOrders.length;
+    const lastTotalCount = lastPendingCountRef.current + lastOnlinePendingCountRef.current;
+
+    if (totalNewOrders > lastTotalCount) {
       try {
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const oscillator = audioContext.createOscillator();
-        oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(600, audioContext.currentTime);
-        const gainNode = audioContext.createGain();
-        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        oscillator.start();
-        oscillator.stop(audioContext.currentTime + 0.15);
+        
+        const playBeep = (freq: number, duration: number, delay: number) => {
+          setTimeout(() => {
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, audioContext.currentTime);
+            gain.gain.setValueAtTime(0.3, audioContext.currentTime);
+            osc.connect(gain);
+            gain.connect(audioContext.destination);
+            osc.start();
+            osc.stop(audioContext.currentTime + duration);
+          }, delay * 1000);
+        };
+
+        if (pendingOnlineOrders.length > lastOnlinePendingCountRef.current) {
+          // Double chirp for Online Delivery Order
+          playBeep(880, 0.1, 0);
+          playBeep(880, 0.1, 0.15);
+        } else {
+          // Single beep for Table Dine-in self order
+          playBeep(600, 0.15, 0);
+        }
       } catch (e) {
         console.warn('Alert sound failed:', e);
       }
     }
     lastPendingCountRef.current = pendingOrders.length;
-  }, [pendingOrders.length]);
+    lastOnlinePendingCountRef.current = pendingOnlineOrders.length;
+  }, [pendingOrders.length, pendingOnlineOrders.length]);
 
   const handleApproveOrder = async (order: any) => {
     try {
@@ -119,6 +144,62 @@ export function AppLayout({
       await db.selfOrders.update(orderId, { status: 'rejected' });
     } catch (err) {
       console.error('Failed to reject order:', err);
+    }
+  };
+
+  const handleAcceptOnlineOrder = async (order: any) => {
+    try {
+      // 1. Update order status and payment status in DB
+      await db.onlineOrders.update(order.id, { 
+        status: 'accepted',
+        paymentStatus: 'paid'
+      });
+
+      // 2. Add customer to loyalty list if details exist
+      if (order.customerName && order.customerPhone) {
+        const { upsertPosCustomer } = await import('../db/customers');
+        const totalAmt = order.items.reduce((sum: number, item: any) => sum + ((item.menuItem?.price || item.price || 0) * item.quantity), 0);
+        await upsertPosCustomer(order.customerName, order.customerPhone, totalAmt);
+      }
+
+      // 3. Print KOT & Delivery Slip
+      try {
+        const { ThermalPrinter } = await import('../printer');
+        const kotNum = await getNextKotNumber();
+
+        // Print Kitchen KOT
+        await ThermalPrinter.printKOT(99, order.items, kotNum);
+
+        // Print Delivery Slip
+        const globalSettings = await db.restaurantSettings.get('global');
+        const profile = await db.restaurantProfile.get('global');
+        const printerSettings = { ...(profile || {}), ...(globalSettings || {}) };
+        await ThermalPrinter.printDeliverySlip(order, printerSettings);
+      } catch (printErr) {
+        console.error('KOT/Delivery printing failed:', printErr);
+      }
+
+      notifyGlobalChange('online_orders');
+    } catch (err) {
+      console.error('Failed to accept online order:', err);
+    }
+  };
+
+  const handleRejectOnlineOrder = async (orderId: string) => {
+    try {
+      await db.onlineOrders.update(orderId, { status: 'rejected' });
+      notifyGlobalChange('online_orders');
+    } catch (err) {
+      console.error('Failed to reject online order:', err);
+    }
+  };
+
+  const handleUpdateOnlineOrderStatus = async (orderId: string, newStatus: 'preparing' | 'dispatched' | 'delivered') => {
+    try {
+      await db.onlineOrders.update(orderId, { status: newStatus });
+      notifyGlobalChange('online_orders');
+    } catch (err) {
+      console.error('Failed to update online order status:', err);
     }
   };
   const profileMenuRef = React.useRef<HTMLDivElement>(null);
@@ -294,6 +375,23 @@ export function AppLayout({
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 text-[9px] font-black text-white items-center justify-center">
                     {pendingOrders.length}
+                  </span>
+                </span>
+              )}
+            </button>
+
+            {/* Online Orders Notification Bell */}
+            <button
+              onClick={() => setShowOnlineOrdersModal(true)}
+              className="relative p-2 rounded-xl bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 transition-all duration-300 text-gray-600 dark:text-slate-300 hover:text-orange-500 dark:hover:text-orange-400 border border-gray-200/50 dark:border-slate-700/50 shadow-sm cursor-pointer"
+              title="Online Orders (Home Delivery & Takeaway)"
+            >
+              <Globe size={16} className={pendingOnlineOrders.length > 0 ? 'animate-pulse text-orange-500 dark:text-orange-400' : ''} />
+              {pendingOnlineOrders.length > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-4 w-4 bg-orange-500 text-[9px] font-black text-white items-center justify-center">
+                    {pendingOnlineOrders.length}
                   </span>
                 </span>
               )}
@@ -479,6 +577,212 @@ export function AppLayout({
                       </div>
                     </div>
                   ))
+                )}
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* Online Orders Approval & Status tracking Modal */}
+        {showOnlineOrdersModal && (
+          <div className="fixed inset-0 bg-black/45 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-800 rounded-3xl w-full max-w-xl overflow-hidden flex flex-col shadow-2xl animate-fade-in text-gray-800 dark:text-slate-100">
+              
+              {/* Modal Header with tabs */}
+              <div className="px-6 pt-4.5 pb-0 border-b border-gray-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
+                <div className="flex justify-between items-center mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 bg-orange-50 dark:bg-orange-950/30 text-orange-500 dark:text-orange-400 rounded-xl">
+                      <Globe size={16} className="animate-pulse" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-black text-gray-850 dark:text-slate-200">Online Orders Panel</h2>
+                      <p className="text-[9px] text-gray-400 font-bold uppercase mt-0.5 tracking-wider">Home Delivery & Takeaway</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowOnlineOrdersModal(false)}
+                    className="text-xs font-black text-gray-400 hover:text-gray-650 dark:hover:text-slate-350 cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+
+                {/* Sub-tabs */}
+                <div className="flex gap-4 border-t border-gray-100 dark:border-slate-800/60 pt-1">
+                  <button
+                    onClick={() => setOnlineTab('pending')}
+                    className={`pb-2.5 text-xs font-black uppercase tracking-wider relative transition-all cursor-pointer ${
+                      onlineTab === 'pending'
+                        ? 'text-orange-650 dark:text-orange-400 border-b-2 border-orange-500'
+                        : 'text-gray-400 hover:text-gray-650 dark:hover:text-slate-450'
+                    }`}
+                  >
+                    Pending Orders ({pendingOnlineOrders.length})
+                  </button>
+                  <button
+                    onClick={() => setOnlineTab('active')}
+                    className={`pb-2.5 text-xs font-black uppercase tracking-wider relative transition-all cursor-pointer ${
+                      onlineTab === 'active'
+                        ? 'text-orange-650 dark:text-orange-400 border-b-2 border-orange-500'
+                        : 'text-gray-400 hover:text-gray-650 dark:hover:text-slate-450'
+                    }`}
+                  >
+                    Active & Tracking ({activeOnlineOrders.length})
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Content */}
+              <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4 max-h-[30rem] scrollbar-hide">
+                {onlineTab === 'pending' ? (
+                  pendingOnlineOrders.length === 0 ? (
+                    <div className="text-center py-16 flex flex-col items-center gap-2">
+                      <CheckCircle2 size={32} className="text-emerald-500" />
+                      <p className="text-xs font-bold text-gray-400 dark:text-slate-500">No pending online orders right now.</p>
+                    </div>
+                  ) : (
+                    pendingOnlineOrders.map((ord) => {
+                      const totalAmt = ord.items.reduce((sum: number, item: any) => sum + ((item.menuItem?.price || item.price || 0) * item.quantity), 0);
+                      return (
+                        <div key={ord.id} className="p-4 bg-slate-50 dark:bg-slate-950/20 border border-gray-150 dark:border-slate-800/80 rounded-2xl flex flex-col gap-3">
+                          <div className="flex justify-between items-start border-b border-gray-100 dark:border-slate-800 pb-2.5">
+                            <div>
+                              <span className={`font-black text-[9px] uppercase px-2.5 py-0.5 rounded-full border ${
+                                ord.orderType === 'delivery'
+                                  ? 'bg-blue-50 text-blue-650 border-blue-200/20 dark:bg-blue-950/25 dark:text-blue-400'
+                                  : 'bg-amber-50 text-amber-700 border-amber-200/20 dark:bg-amber-950/25 dark:text-amber-400'
+                              }`}>
+                                {ord.orderType === 'delivery' ? 'Home Delivery' : 'Takeaway'}
+                              </span>
+                              <span className="text-[10px] text-gray-400 font-bold ml-2">
+                                {new Date(ord.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            <span className="text-[11px] font-black text-slate-800 dark:text-slate-200">
+                              ₹{totalAmt.toFixed(2)}
+                            </span>
+                          </div>
+
+                          {/* Customer info & Delivery location */}
+                          <div className="text-xs font-bold text-gray-600 dark:text-slate-350 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800/50 p-2.5 rounded-xl flex flex-col gap-1">
+                            <p><span className="text-gray-400">Name:</span> {ord.customerName} ({ord.customerPhone})</p>
+                            {ord.orderType === 'delivery' ? (
+                              <p><span className="text-gray-400">Address:</span> {ord.deliveryAddress}</p>
+                            ) : (
+                              <p><span className="text-gray-400">Pickup Time:</span> {ord.pickupTime}</p>
+                            )}
+                          </div>
+
+                          {/* Items List */}
+                          <div className="flex flex-col gap-1.5 pl-1.5">
+                            {ord.items.map((item: any, idx: number) => (
+                              <div key={idx} className="flex justify-between items-center text-[11px] font-bold text-gray-650 dark:text-slate-300">
+                                <span>{item.menuItem?.name || item.name} <span className="text-indigo-600 dark:text-indigo-400 font-black">x{item.quantity}</span></span>
+                                <span>₹{((item.menuItem?.price || item.price || 0) * item.quantity).toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Verification Alert Info */}
+                          <p className="text-[9px] text-orange-600 bg-orange-50 dark:bg-orange-950/30 border border-orange-200/20 px-2 py-1.5 rounded-xl font-bold">
+                            ⚠️ Verify exact UPI amount (₹{totalAmt.toFixed(2)}) is received before confirming!
+                          </p>
+
+                          {/* Action Buttons */}
+                          <div className="flex gap-2.5 mt-1 pt-2.5 border-t border-gray-100 dark:border-slate-800">
+                            <button
+                              onClick={() => handleRejectOnlineOrder(ord.id)}
+                              className="flex-1 py-2 bg-red-50 hover:bg-red-100 dark:bg-red-950/10 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 font-extrabold text-[10px] rounded-xl transition-all cursor-pointer flex justify-center items-center gap-1 border border-red-200/10"
+                            >
+                              <XCircle size={12} />
+                              Reject
+                            </button>
+                            <button
+                              onClick={() => handleAcceptOnlineOrder(ord)}
+                              className="flex-1 py-2 bg-green-650 hover:bg-green-755 text-white font-extrabold text-[10px] rounded-xl transition-all cursor-pointer flex justify-center items-center gap-1 shadow-md shadow-green-500/10 border border-white/5"
+                            >
+                              <CheckCircle2 size={12} />
+                              Confirm & Print
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )
+                ) : (
+                  activeOnlineOrders.length === 0 ? (
+                    <div className="text-center py-16 flex flex-col items-center gap-2">
+                      <p className="text-xs font-bold text-gray-400 dark:text-slate-500">No active delivery or takeaway orders.</p>
+                    </div>
+                  ) : (
+                    activeOnlineOrders.map((ord) => {
+                      const totalAmt = ord.items.reduce((sum: number, item: any) => sum + ((item.menuItem?.price || item.price || 0) * item.quantity), 0);
+                      return (
+                        <div key={ord.id} className="p-4 bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-800/80 rounded-2xl flex flex-col gap-3.5 shadow-sm">
+                          <div className="flex justify-between items-center border-b border-gray-100 dark:border-slate-800/50 pb-2">
+                            <div className="flex items-center gap-2">
+                              <span className={`font-black text-[9px] uppercase px-2.5 py-0.5 rounded-full border ${
+                                ord.orderType === 'delivery'
+                                  ? 'bg-blue-50 text-blue-650 border-blue-200/20 dark:bg-blue-950/25 dark:text-blue-400'
+                                  : 'bg-amber-50 text-amber-700 border-amber-200/20 dark:bg-amber-950/25 dark:text-amber-400'
+                              }`}>
+                                {ord.orderType === 'delivery' ? 'Home Delivery' : 'Takeaway'}
+                              </span>
+                              <span className={`font-black text-[9px] uppercase px-2.5 py-0.5 rounded-full border ${
+                                ord.status === 'accepted' ? 'bg-yellow-50 text-yellow-600 border-yellow-200/25 dark:bg-yellow-950/25 dark:text-yellow-400' :
+                                ord.status === 'preparing' ? 'bg-indigo-50 text-indigo-650 border-indigo-200/25 dark:bg-indigo-950/25 dark:text-indigo-400' :
+                                'bg-blue-50 text-blue-600 border-blue-200/25 dark:bg-blue-950/25 dark:text-blue-400'
+                              }`}>
+                                {ord.status === 'accepted' ? 'Accepted' :
+                                 ord.status === 'preparing' ? 'Preparing' :
+                                 'Out for Delivery'}
+                              </span>
+                            </div>
+                            <span className="text-xs font-black text-gray-800 dark:text-slate-200">₹{totalAmt.toFixed(2)}</span>
+                          </div>
+
+                          <div className="text-xs font-bold text-gray-650 dark:text-slate-350">
+                            <p><span className="text-gray-400 font-medium">Customer:</span> {ord.customerName} ({ord.customerPhone})</p>
+                            {ord.orderType === 'delivery' ? (
+                              <p><span className="text-gray-400 font-medium">Address:</span> {ord.deliveryAddress}</p>
+                            ) : (
+                              <p><span className="text-gray-400 font-medium">Pickup Time:</span> {ord.pickupTime}</p>
+                            )}
+                          </div>
+
+                          {/* Quick Workflow Action button to advance status */}
+                          <div className="flex gap-2 justify-end mt-1">
+                            {ord.status === 'accepted' && (
+                              <button
+                                onClick={() => handleUpdateOnlineOrderStatus(ord.id, 'preparing')}
+                                className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/30 dark:hover:bg-indigo-900/40 text-indigo-650 dark:text-indigo-400 text-[10px] font-black uppercase tracking-wider rounded-xl cursor-pointer transition-all border border-indigo-100 dark:border-indigo-900/20"
+                              >
+                                👨‍🍳 Start Preparing
+                              </button>
+                            )}
+                            {ord.status === 'preparing' && (
+                              <button
+                                onClick={() => handleUpdateOnlineOrderStatus(ord.id, 'dispatched')}
+                                className="px-4 py-2 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/30 dark:hover:bg-blue-900/40 text-blue-650 dark:text-blue-400 text-[10px] font-black uppercase tracking-wider rounded-xl cursor-pointer transition-all border border-blue-100 dark:border-blue-900/20"
+                              >
+                                🚚 Dispatch Order
+                              </button>
+                            )}
+                            {(ord.status === 'dispatched' || (ord.orderType === 'takeaway' && ['accepted', 'preparing'].includes(ord.status))) && (
+                              <button
+                                onClick={() => handleUpdateOnlineOrderStatus(ord.id, 'delivered')}
+                                className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:hover:bg-emerald-900/40 text-emerald-650 dark:text-emerald-450 text-[10px] font-black uppercase tracking-wider rounded-xl cursor-pointer transition-all border border-emerald-100 dark:border-emerald-900/20"
+                              >
+                                ✓ {ord.orderType === 'delivery' ? 'Mark Delivered' : 'Mark Picked Up'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )
                 )}
               </div>
 

@@ -1272,5 +1272,96 @@ export class ThermalPrinter {
       }
     });
   }
+
+  static async printDeliverySlip(order: any, settings: any) {
+    const printerMode = settings?.printerMode || 'single';
+    const activePort = printerMode === 'multiple' ? this.receiptPort : (this.port || this.receiptPort);
+    if (!activePort) throw new Error('Receipt/Delivery Printer not connected');
+
+    return this.enqueuePort(activePort, async () => {
+      if (activePort.writable.locked) {
+        await new Promise<void>((resolve, reject) => {
+          const startTime = Date.now();
+          const check = setInterval(() => {
+            if (!activePort.writable.locked) {
+              clearInterval(check);
+              resolve();
+            } else if (Date.now() - startTime > 5000) {
+              clearInterval(check);
+              reject(new Error('Printer Port Lock Timeout'));
+            }
+          }, 50);
+        });
+      }
+
+      const width = settings?.printerWidth || 32;
+      const encoder = new TextEncoder();
+      const writer = activePort.writable.getWriter();
+
+      try {
+        let slip = INIT + '\n';
+        const separator = '-'.repeat(width) + '\n';
+        const doubleSeparator = '='.repeat(width) + '\n';
+
+        const title = order.orderType === 'delivery' ? 'ONLINE DELIVERY' : 'ONLINE TAKEAWAY';
+        slip += CENTER + BOLD_ON + DOUBLE_HW_ON + title + BOLD_OFF + DOUBLE_HEIGHT_OFF + '\n';
+        slip += CENTER + `Time: ${new Date(order.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\n`;
+        slip += doubleSeparator;
+
+        slip += BOLD_ON + `Customer Details:` + BOLD_OFF + '\n';
+        slip += `Name : ${order.customerName}\n`;
+        slip += `Phone: ${order.customerPhone}\n`;
+
+        if (order.orderType === 'delivery') {
+          slip += `Addr : ${order.deliveryAddress}\n`;
+        } else {
+          slip += `Pickup Time: ${order.pickupTime}\n`;
+        }
+        slip += separator;
+
+        slip += BOLD_ON + `Order Items:` + BOLD_OFF + '\n';
+        let subtotal = 0;
+        for (const item of order.items) {
+          const name = item.menuItem?.name || item.name;
+          const qty = item.quantity;
+          const price = item.menuItem?.price || item.price || 0;
+          const lineTotal = price * qty;
+          subtotal += lineTotal;
+
+          const qtyStr = ` x${qty}`;
+          const priceStr = lineTotal.toFixed(2);
+          const spaceLeft = width - name.length;
+          
+          if (spaceLeft >= 10) {
+            const spaces = ' '.repeat(width - name.length - priceStr.length);
+            slip += `${name}${spaces}${priceStr}\n`;
+            slip += `${qtyStr}\n`;
+          } else {
+            slip += `${name}\n`;
+            const spaces = ' '.repeat(width - qtyStr.length - priceStr.length);
+            slip += `${qtyStr}${spaces}${priceStr}\n`;
+          }
+        }
+        slip += separator;
+
+        const totalStr = subtotal.toFixed(2);
+        const totalLabel = "TOTAL AMOUNT";
+        const spaces = ' '.repeat(width - totalLabel.length - totalStr.length);
+        slip += BOLD_ON + DOUBLE_HEIGHT_ON + `${totalLabel}${spaces}${totalStr}\n` + BOLD_OFF + DOUBLE_HEIGHT_OFF;
+        slip += separator;
+
+        slip += CENTER + `Payment Method: UPI\n`;
+        slip += CENTER + BOLD_ON + `Status: PAID (PREPAID)\n` + BOLD_OFF;
+        slip += doubleSeparator;
+
+        slip += CENTER + `Thank You for Ordering!\n\n\n\n\n` + CUT;
+
+        await writer.write(encoder.encode(slip));
+        return true;
+      } finally {
+        try { writer.releaseLock(); } catch (e) {}
+      }
+    });
+  }
 }
 
