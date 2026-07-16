@@ -4,8 +4,10 @@ import {
   Globe, Bell, Clock, MapPin, Phone, User, CheckCircle2, XCircle, 
   ShieldAlert
 } from 'lucide-react';
+import { useToast } from './Toast';
 
 export default function OnlineOrdersView() {
+  const { showToast } = useToast();
   const [activeSubTab, setActiveSubTab] = useState<'pending_dinein' | 'pending_online' | 'active_online'>('pending_dinein');
 
   // Load Self Orders (Dine-in Tables)
@@ -100,8 +102,9 @@ export default function OnlineOrdersView() {
       }
 
       notifyGlobalChange('online_orders');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to accept online order:', err);
+      showToast(err.message || 'Failed to accept online order.', 'error');
     }
   };
 
@@ -110,8 +113,9 @@ export default function OnlineOrdersView() {
     try {
       await db.onlineOrders.update(orderId, { status: 'rejected' });
       notifyGlobalChange('online_orders');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to reject online order:', err);
+      showToast(err.message || 'Failed to reject online order.', 'error');
     }
   };
 
@@ -120,8 +124,9 @@ export default function OnlineOrdersView() {
     try {
       await db.onlineOrders.update(orderId, { status: newStatus });
       notifyGlobalChange('online_orders');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to update online order status:', err);
+      showToast(err.message || 'Failed to update online order status.', 'error');
     }
   };
 
