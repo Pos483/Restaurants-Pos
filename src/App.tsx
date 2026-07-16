@@ -28,6 +28,7 @@ const Customers          = lazy(() => import('./components/Customers'));
 const StockManagement    = lazy(() => import('./components/StockManagement'));
 const KOTManagement      = lazy(() => import('./components/KOTManagement'));
 const HelpSupport        = lazy(() => import('./components/HelpSupport'));
+const OnlineOrdersView   = lazy(() => import('./components/OnlineOrdersView'));
 const Subscription       = lazy(() => import('./components/Subscription'));
 
 export default function App() {
@@ -242,6 +243,7 @@ export default function App() {
         {activeTab === 'stock'        && <StockManagement />}
         {activeTab === 'kot'          && <KOTManagement />}
         {activeTab === 'help'         && <HelpSupport />}
+        {activeTab === 'online_orders' && <OnlineOrdersView />}
         {activeTab === 'subscription' && (
           <Subscription
             subscriptionState={premiumState}
