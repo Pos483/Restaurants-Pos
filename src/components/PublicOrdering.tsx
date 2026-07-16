@@ -48,6 +48,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
   const [customerPhone, setCustomerPhone] = useState('');
   const [placingOrder, setPlacingOrder] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
+  const [paymentClicked, setPaymentClicked] = useState(false);
 
   // Force light mode for customer portal
   useEffect(() => {
@@ -377,6 +378,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
 
       setOrderSuccess(true);
       setCart([]);
+      setPaymentClicked(false);
     } catch (err: any) {
       console.error('Order Placement Error:', err);
       alert('Failed to place order. Please try again.');
@@ -811,6 +813,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
                         <div className="flex flex-col gap-2.5 items-center justify-center">
                           <a
                             href={`upi://pay?pa=${restaurantUpiId || '8677994666@upi'}&pn=${encodeURIComponent(restaurantName)}&am=${cartSubtotal}&cu=INR`}
+                            onClick={() => setPaymentClicked(true)}
                             className="w-full py-3 bg-gradient-to-r from-indigo-650 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white text-center rounded-2xl text-[10px] font-extrabold uppercase tracking-wider shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5 border border-indigo-500/10 cursor-pointer"
                           >
                             ⚡ Open GPay / PhonePe / Paytm
@@ -837,17 +840,23 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
                     <span className="text-sm font-black text-gray-900">₹{cartSubtotal.toFixed(2)}</span>
                   </div>
 
-                  <button
-                    type="submit"
-                    disabled={placingOrder}
-                    className="w-full py-4 bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700 text-white font-black rounded-2xl text-xs shadow-lg shadow-orange-500/20 transition-all duration-200 cursor-pointer flex justify-center items-center gap-1.5 active:scale-95 border border-white/5"
-                  >
-                    {placingOrder ? (
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      tableId ? 'Place Order & Send to Kitchen' : 'Place Prepaid Order'
-                    )}
-                  </button>
+                  {(!tableId && !paymentClicked) ? (
+                    <div className="text-center py-3.5 text-[10.5px] font-black text-orange-655 bg-orange-50 border border-orange-100/50 rounded-2xl uppercase tracking-wider shadow-inner animate-pulse">
+                      Tap UPI button above to pay first
+                    </div>
+                  ) : (
+                    <button
+                      type="submit"
+                      disabled={placingOrder}
+                      className="w-full py-4 bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700 text-white font-black rounded-2xl text-xs shadow-lg shadow-orange-500/20 transition-all duration-200 cursor-pointer flex justify-center items-center gap-1.5 active:scale-95 border border-white/5"
+                    >
+                      {placingOrder ? (
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        tableId ? 'Place Order & Send to Kitchen' : 'Confirm & Place Prepaid Order'
+                      )}
+                    </button>
+                  )}
                 </form>
               </div>
             )}
