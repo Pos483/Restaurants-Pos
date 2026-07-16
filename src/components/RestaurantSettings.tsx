@@ -22,7 +22,10 @@ import {
   Cloud,
   Database,
   Upload,
-  Copy
+  Copy,
+  Truck,
+  ShoppingBag,
+  Globe
 } from 'lucide-react';
 import { ThermalPrinter } from '../printer';
 import { useToast } from './Toast';
@@ -93,7 +96,9 @@ export default function RestaurantSettings() {
     printerWidth: 32,
     printerMode: 'single',
     categoryLayout: 'sidebar',
-    billLanguage: 'en'
+    billLanguage: 'en',
+    onlineDeliveryEnabled: true,
+    onlineTakeawayEnabled: true
   });
 
   const [appVersion, setAppVersion] = useState(import.meta.env.VITE_APP_VERSION || '2.0.5');
@@ -173,7 +178,9 @@ export default function RestaurantSettings() {
         printerWidth: globalSettings.printerWidth || 32,
         printerMode: globalSettings.printerMode || 'single',
         categoryLayout: currentLayout,
-        billLanguage: localStorage.getItem('billLanguage') || globalSettings.billLanguage || 'en'
+        billLanguage: localStorage.getItem('billLanguage') || globalSettings.billLanguage || 'en',
+        onlineDeliveryEnabled: globalSettings.onlineDeliveryEnabled !== false,
+        onlineTakeawayEnabled: globalSettings.onlineTakeawayEnabled !== false
       });
     }
   }, [globalSettings, currentLayout]);
@@ -440,6 +447,8 @@ export default function RestaurantSettings() {
         printerMode: formData.printerMode as 'single' | 'multiple',
         categoryLayout: formData.categoryLayout as 'top' | 'sidebar',
         billLanguage: formData.billLanguage,
+        onlineDeliveryEnabled: formData.onlineDeliveryEnabled,
+        onlineTakeawayEnabled: formData.onlineTakeawayEnabled,
         gstPercentage: existingSettings.gstPercentage || 5
       } as any);
 
@@ -673,6 +682,61 @@ export default function RestaurantSettings() {
                           className={`w-10 h-6 rounded-full p-1 transition-all duration-300 select-none shrink-0 relative flex items-center ${
                             isActive 
                               ? 'bg-gradient-to-r from-indigo-500 to-purple-600 shadow-[0_0_8px_rgba(99,102,241,0.35)]' 
+                              : 'bg-gray-250 dark:bg-slate-800'
+                          }`}
+                        >
+                          <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform duration-300 ${
+                            isActive ? 'translate-x-4' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Online Menu & Ordering Settings */}
+              <div className="flex flex-col gap-3.5 mt-4">
+                <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5 leading-none">
+                  <Globe size={12} className="text-orange-500" />
+                  Online Ordering Services
+                </label>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-1">
+                  {[
+                    { key: 'onlineDeliveryEnabled', label: 'Enable Home Delivery', desc: 'Allows customers to order home delivery online.', icon: <Truck size={16} /> },
+                    { key: 'onlineTakeawayEnabled', label: 'Enable Self Takeaway', desc: 'Allows customers to place online self-takeaway orders.', icon: <ShoppingBag size={16} /> }
+                  ].map((item) => {
+                    const isActive = formData[item.key as keyof typeof formData];
+                    return (
+                      <div 
+                        key={item.key}
+                        onClick={() => handleToggle(item.key as keyof typeof formData)}
+                        className={`p-4 rounded-2xl border transition-all duration-350 cursor-pointer select-none flex items-center justify-between gap-4 group hover:shadow-md hover:translate-x-0.5 ${
+                          isActive 
+                            ? 'border-orange-500/30 bg-gradient-to-tr from-orange-500/[0.03] to-amber-500/[0.01] dark:from-orange-500/[0.06] dark:to-amber-500/[0.02] shadow-[0_2px_12px_rgba(249,115,22,0.04)]' 
+                            : 'border-gray-150 dark:border-slate-800/80 hover:border-gray-300 dark:hover:border-slate-700 bg-white/40 dark:bg-slate-900/30'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <div className={`p-2.5 rounded-xl transition-all duration-300 shrink-0 ${
+                            isActive 
+                              ? 'bg-gradient-to-tr from-orange-500 to-amber-600 text-white shadow-md shadow-orange-500/10' 
+                              : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 group-hover:bg-gray-200 dark:group-hover:bg-slate-700'
+                          }`}>
+                            {item.icon}
+                          </div>
+                          <div className="min-w-0">
+                            <span className="text-xs font-black text-gray-805 dark:text-slate-205 tracking-tight leading-none block">{item.label}</span>
+                            <p className="text-[10px] text-gray-405 dark:text-slate-500 font-bold leading-normal mt-1.5 truncate">{item.desc}</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          title={item.label}
+                          className={`w-10 h-6 rounded-full p-1 transition-all duration-300 select-none shrink-0 relative flex items-center ${
+                            isActive 
+                              ? 'bg-gradient-to-r from-orange-500 to-amber-500 shadow-[0_0_8px_rgba(249,115,22,0.35)]' 
                               : 'bg-gray-250 dark:bg-slate-800'
                           }`}
                         >

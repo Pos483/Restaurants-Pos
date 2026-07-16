@@ -27,6 +27,9 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [pickupTime, setPickupTime] = useState('');
 
+  const [onlineDeliveryEnabled, setOnlineDeliveryEnabled] = useState(true);
+  const [onlineTakeawayEnabled, setOnlineTakeawayEnabled] = useState(true);
+
   const [activeOrderId, setActiveOrderId] = useState<string | null>(() => localStorage.getItem('lastOnlineOrderId'));
   const [trackedOrder, setTrackedOrder] = useState<any>(null);
   const [showLiveTracker, setShowLiveTracker] = useState(false);
@@ -159,7 +162,12 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
       setTenantId(profile.app_user_id);
       setRestaurantUpiId(profile.upi_id || '');
 
-      const [menuRes, catRes] = await Promise.all([
+      const [settingsRes, menuRes, catRes] = await Promise.all([
+        supabase
+          .from('restaurant_settings')
+          .select('online_delivery_enabled, online_takeaway_enabled')
+          .eq('app_user_id', profile.app_user_id)
+          .maybeSingle(),
         supabase
           .from('menu_items')
           .select('*')
@@ -171,8 +179,22 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
           .eq('app_user_id', profile.app_user_id)
       ]);
 
+      if (settingsRes.error) throw settingsRes.error;
       if (menuRes.error) throw menuRes.error;
       if (catRes.error) throw catRes.error;
+
+      if (settingsRes.data) {
+        const isDeliveryOn = settingsRes.data.online_delivery_enabled !== false;
+        const isTakeawayOn = settingsRes.data.online_takeaway_enabled !== false;
+        setOnlineDeliveryEnabled(isDeliveryOn);
+        setOnlineTakeawayEnabled(isTakeawayOn);
+
+        if (!isDeliveryOn && isTakeawayOn) {
+          setOrderType('takeaway');
+        } else {
+          setOrderType('delivery');
+        }
+      }
 
       const parsedMenu: DBMenuItem[] = (menuRes.data || []).map(r => ({
         id: r.id,
@@ -393,6 +415,26 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
           >
             Order More Items
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!tableId && !onlineDeliveryEnabled && !onlineTakeawayEnabled) {
+    return (
+      <div className="h-[100dvh] w-screen bg-[#0F172A] flex flex-col items-center justify-center p-6 text-center select-none relative overflow-hidden">
+        <div className="absolute top-[-10%] left-[-10%] w-72 h-72 rounded-full bg-orange-500/5 blur-3xl" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-80 h-80 rounded-full bg-rose-500/5 blur-3xl" />
+        <div className="max-w-sm flex flex-col items-center gap-6 relative z-10 animate-fade-in">
+          <div className="w-20 h-20 bg-orange-500/10 text-orange-500 rounded-3xl flex items-center justify-center border border-orange-500/20 shadow-lg shadow-orange-500/10">
+            <Globe size={38} className="animate-pulse" />
+          </div>
+          <div>
+            <h1 className="text-xl font-black text-white leading-tight">Online Ordering is Closed</h1>
+            <p className="text-xs text-slate-400 font-bold mt-3 leading-relaxed">
+              We are currently not accepting delivery or takeaway orders online. Please call or visit us directly to place your order!
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -619,7 +661,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
               <div className="flex flex-col gap-3">
                 
                 {/* 1. Toggle between Delivery and Takeaway (Online Mode only) */}
-                {!tableId && (
+                {!tableId && onlineDeliveryEnabled && onlineTakeawayEnabled && (
                   <div className="flex gap-2 p-1 bg-slate-100 rounded-xl mb-1 shrink-0">
                     <button
                       type="button"

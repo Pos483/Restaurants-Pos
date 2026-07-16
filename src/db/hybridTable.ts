@@ -540,8 +540,44 @@ const restaurantProfileTable = new HybridTable<DBRestaurantProfile>(
 
 const restaurantSettingsTable = new HybridTable<DBRestaurantSettings>(
   'restaurant_settings',
-  (s, uid) => ({ app_user_id: uid, id: s.id, bill_sequence: s.billSequence, kot_sequence: s.kotSequence, last_kot_date: s.lastKotDate, print_phone: s.printPhone, print_email: s.printEmail, print_address: s.printAddress, print_fssai: s.printFssai, print_gst: s.printGst, print_thank_you: s.printThankYou, print_qr_code: s.printQrCode, baud_rate: s.baudRate, printer_width: s.printerWidth, printer_mode: s.printerMode, updated_at: new Date().toISOString() }),
-  (r) => ({ id: r.id, billSequence: r.bill_sequence ? Number(r.bill_sequence) : 1, kotSequence: r.kot_sequence ? Number(r.kot_sequence) : undefined, lastKotDate: r.last_kot_date ?? undefined, printPhone: r.print_phone ?? true, printEmail: r.print_email ?? false, printAddress: r.print_address ?? true, printFssai: r.print_fssai ?? true, printGst: r.print_gst ?? true, printThankYou: r.print_thank_you ?? true, printQrCode: r.print_qr_code ?? false, baudRate: r.baud_rate ? Number(r.baud_rate) : undefined, printerWidth: r.printer_width ? Number(r.printer_width) : undefined, printerMode: r.printer_mode ?? undefined, })
+  (s, uid) => ({ 
+    app_user_id: uid, 
+    id: s.id, 
+    bill_sequence: s.billSequence, 
+    kot_sequence: s.kotSequence, 
+    last_kot_date: s.lastKotDate, 
+    print_phone: s.printPhone, 
+    print_email: s.printEmail, 
+    print_address: s.printAddress, 
+    print_fssai: s.printFssai, 
+    print_gst: s.printGst, 
+    print_thank_you: s.printThankYou, 
+    print_qr_code: s.printQrCode, 
+    baud_rate: s.baudRate, 
+    printer_width: s.printerWidth, 
+    printer_mode: s.printerMode, 
+    online_delivery_enabled: s.onlineDeliveryEnabled ?? true,
+    online_takeaway_enabled: s.onlineTakeawayEnabled ?? true,
+    updated_at: new Date().toISOString() 
+  }),
+  (r) => ({ 
+    id: r.id, 
+    billSequence: r.bill_sequence ? Number(r.bill_sequence) : 1, 
+    kotSequence: r.kot_sequence ? Number(r.kot_sequence) : undefined, 
+    lastKotDate: r.last_kot_date ?? undefined, 
+    printPhone: r.print_phone ?? true, 
+    printEmail: r.print_email ?? false, 
+    printAddress: r.print_address ?? true, 
+    printFssai: r.print_fssai ?? true, 
+    printGst: r.print_gst ?? true, 
+    printThankYou: r.print_thank_you ?? true, 
+    printQrCode: r.print_qr_code ?? false, 
+    baudRate: r.baud_rate ? Number(r.baud_rate) : undefined, 
+    printerWidth: r.printer_width ? Number(r.printer_width) : undefined, 
+    printerMode: r.printer_mode ?? undefined, 
+    onlineDeliveryEnabled: r.online_delivery_enabled ?? true,
+    onlineTakeawayEnabled: r.online_takeaway_enabled ?? true,
+  })
 );
 
 const activeOrdersTable = new HybridTable<Table>(

@@ -746,7 +746,9 @@ export default function Dashboard() {
                           ? String(bill.tableId).replace('Quick-', '') 
                           : bill.tableId === 'Quick' 
                             ? (bill.data?.orderType || 'Takeaway') 
-                            : `Table ${bill.tableId}`}
+                            : bill.tableId === 'Online'
+                              ? 'Online'
+                              : `Table ${bill.tableId}`}
                       </span>
                     </td>
                     <td className="p-4">
@@ -837,7 +839,9 @@ export default function Dashboard() {
                     ? String(viewBill.tableId).replace('Quick-', '') 
                     : viewBill.tableId === 'Quick' 
                       ? (viewBill.data?.orderType || 'Takeaway') 
-                      : `Table ${viewBill.tableId}`}
+                      : viewBill.tableId === 'Online'
+                        ? 'Online'
+                        : `Table ${viewBill.tableId}`}
                 </div>
                 {viewBill.billNumber && <div className="text-gray-800 dark:text-slate-200 font-black mt-2">Bill No: {viewBill.billNumber.toString().padStart(6, '0')}</div>}
                 

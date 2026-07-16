@@ -80,6 +80,8 @@ export interface DBRestaurantSettings {
   printerMode?: 'single' | 'multiple';
   categoryLayout?: 'top' | 'sidebar';
   billLanguage?: string;
+  onlineDeliveryEnabled?: boolean;
+  onlineTakeawayEnabled?: boolean;
 }
 
 export interface DBStockTransaction {
