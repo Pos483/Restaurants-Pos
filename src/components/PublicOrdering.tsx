@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '../supabase';
 import { DBMenuItem, DBCategory } from '../db/types';
-import { Plus, Minus, Search, ShoppingBag, Utensils, CheckCircle, ChevronRight, X, Phone, User } from 'lucide-react';
+import { Plus, Minus, Search, ShoppingBag, Utensils, CheckCircle, ChevronRight, X, Phone, User, Globe, XCircle } from 'lucide-react';
 
 interface Props {
   restaurantCode: string;
@@ -27,6 +27,10 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [pickupTime, setPickupTime] = useState('');
 
+  const [activeOrderId, setActiveOrderId] = useState<string | null>(() => localStorage.getItem('lastOnlineOrderId'));
+  const [trackedOrder, setTrackedOrder] = useState<any>(null);
+  const [showLiveTracker, setShowLiveTracker] = useState(false);
+
   const [restaurantName, setRestaurantName] = useState('Siya Bill');
   const [tenantId, setTenantId] = useState('');
   const [menuItems, setMenuItems] = useState<DBMenuItem[]>([]);
@@ -49,6 +53,47 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
       setShowCart(false);
     }
   }, [cart]);
+
+  // Realtime order status tracking
+  useEffect(() => {
+    if (!activeOrderId || !supabase) return;
+    const client = supabase;
+
+    const fetchOrder = async () => {
+      const { data, error } = await client
+        .from('online_orders')
+        .select('*')
+        .eq('id', activeOrderId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Failed to fetch tracked order:', error);
+      } else if (data) {
+        setTrackedOrder(data);
+      } else {
+        setActiveOrderId(null);
+        localStorage.removeItem('lastOnlineOrderId');
+      }
+    };
+    fetchOrder();
+
+    const channel = client
+      .channel(`track_${activeOrderId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'online_orders', filter: `id=eq.${activeOrderId}` },
+        (payload) => {
+          if (payload.new) {
+            setTrackedOrder(payload.new);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      client.removeChannel(channel);
+    };
+  }, [activeOrderId]);
 
   // Load menu automatically if verified
   useEffect(() => {
@@ -261,7 +306,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
           return;
         }
 
-        const { error } = await supabase.from('online_orders').insert({
+        const { data, error } = await supabase.from('online_orders').insert({
           app_user_id: tenantId,
           customer_name: customerName,
           customer_phone: customerPhone,
@@ -282,9 +327,15 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
           })),
           status: 'pending',
           timestamp: Date.now()
-        });
+        }).select('id').single();
 
         if (error) throw error;
+
+        if (data?.id) {
+          localStorage.setItem('lastOnlineOrderId', data.id);
+          setActiveOrderId(data.id);
+          setShowLiveTracker(true);
+        }
       }
 
       setOrderSuccess(true);
@@ -693,6 +744,169 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
               </button>
             </form>
 
+          </div>
+        </div>
+      )}
+
+      {/* Floating Active Order Tracker bar */}
+      {activeOrderId && trackedOrder && !showLiveTracker && (
+        <div className="absolute bottom-5 left-4 right-4 bg-gradient-to-r from-slate-900 via-slate-850 to-indigo-950 text-white rounded-2xl p-4.5 flex justify-between items-center shadow-xl border border-white/5 animate-[pulse_3s_infinite] z-35">
+          <div className="flex items-center gap-3.5 text-xs font-black">
+            <div className="p-2 bg-orange-500/10 rounded-xl text-orange-400">
+              <Globe size={18} className="animate-[spin_4s_linear_infinite]" />
+            </div>
+            <div>
+              <p className="text-[11px] leading-tight font-black">Order Status: <span className="text-orange-400 capitalize">{trackedOrder.status}</span></p>
+              <p className="text-[8.5px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Real-time status updates</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowLiveTracker(true)}
+            className="flex items-center gap-1 text-[9px] font-black uppercase bg-orange-600 hover:bg-orange-700 px-3.5 py-2.5 rounded-xl transition-all cursor-pointer border border-white/5 shadow-md shadow-orange-500/10 active:scale-95"
+          >
+            Track Live
+          </button>
+        </div>
+      )}
+
+      {/* Live Order Tracker Modal Overlay */}
+      {showLiveTracker && activeOrderId && trackedOrder && (
+        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex flex-col justify-end">
+          <div className="bg-white rounded-t-3xl max-h-[90%] flex flex-col shadow-2xl animate-slide-up overflow-hidden">
+            
+            {/* Header */}
+            <div className="px-5 py-4.5 border-b border-gray-150 flex justify-between items-center shrink-0 bg-slate-50/50">
+              <div>
+                <h2 className="text-sm font-black text-gray-850 uppercase tracking-wide flex items-center gap-1.5">
+                  <Globe className="text-orange-500 animate-pulse" size={16} />
+                  Live Order Tracker
+                </h2>
+                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">Order Status updates in real-time</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLiveTracker(false)}
+                className="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-500 rounded-full cursor-pointer transition-colors"
+              >
+                <X size={14} strokeWidth={2.5} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 scrollbar-hide text-gray-850">
+              {/* Order status visual indicators steps */}
+              <div className="flex flex-col gap-4 bg-slate-50 border border-gray-150 p-4.5 rounded-2xl">
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shadow-sm ${
+                    ['pending', 'accepted', 'preparing', 'dispatched', 'delivered'].includes(trackedOrder.status)
+                      ? 'bg-orange-500 text-white font-black' : 'bg-gray-200 text-gray-400 font-bold'
+                  }`}>
+                    1
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-gray-800">Order Placed</h4>
+                    <p className="text-[9px] text-gray-400 font-bold">Waiting for cashier payment approval</p>
+                  </div>
+                </div>
+
+                <div className="w-0.5 h-4 bg-gray-200 ml-4" />
+
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shadow-sm ${
+                    ['accepted', 'preparing', 'dispatched', 'delivered'].includes(trackedOrder.status)
+                      ? 'bg-orange-500 text-white font-black' : 'bg-gray-200 text-gray-400 font-bold'
+                  }`}>
+                    2
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-gray-800">Cooking & Preparing</h4>
+                    <p className="text-[9px] text-gray-400 font-bold">The chef is preparing your meal</p>
+                  </div>
+                </div>
+
+                <div className="w-0.5 h-4 bg-gray-200 ml-4" />
+
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shadow-sm ${
+                    ['dispatched', 'delivered'].includes(trackedOrder.status)
+                      ? 'bg-orange-500 text-white font-black' : 'bg-gray-200 text-gray-400 font-bold'
+                  }`}>
+                    3
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-gray-800">
+                      {trackedOrder.orderType === 'delivery' ? 'Out for Delivery' : 'Ready for Takeaway'}
+                    </h4>
+                    <p className="text-[9px] text-gray-400 font-bold">
+                      {trackedOrder.orderType === 'delivery'
+                        ? 'Rider has picked up your order'
+                        : 'Please visit the counter to pick up your order'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="w-0.5 h-4 bg-gray-200 ml-4" />
+
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shadow-sm ${
+                    trackedOrder.status === 'delivered'
+                      ? 'bg-emerald-500 text-white font-black' : 'bg-gray-200 text-gray-400 font-bold'
+                  }`}>
+                    ✓
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-gray-800">Completed</h4>
+                    <p className="text-[9px] text-gray-400 font-bold">Order successfully delivered/picked up!</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Order Status banner if rejected */}
+              {trackedOrder.status === 'rejected' && (
+                <div className="bg-red-50 border border-red-200/50 text-red-600 p-4.5 rounded-2xl flex flex-col gap-1.5">
+                  <h4 className="text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
+                    <XCircle size={14} /> Order Rejected
+                  </h4>
+                  <p className="text-[10px] font-bold">
+                    This order was rejected. Please contact the restaurant directly to clarify or adjust payment details.
+                  </p>
+                </div>
+              )}
+
+              {/* Order Items List details */}
+              <div className="flex flex-col gap-3">
+                <h4 className="text-[10px] font-black uppercase text-gray-450 tracking-wider">Order Summary</h4>
+                <div className="border border-gray-150 rounded-2xl p-4 flex flex-col gap-2.5 bg-slate-50/50">
+                  {trackedOrder.items.map((item: any, idx: number) => (
+                    <div key={idx} className="flex justify-between items-center text-xs font-extrabold text-gray-700">
+                      <span>{item.menuItem?.name || item.name} <span className="text-orange-550 font-black">x{item.quantity}</span></span>
+                      <span>₹{((item.menuItem?.price || item.price || 0) * item.quantity).toFixed(2)}</span>
+                    </div>
+                  ))}
+                  <div className="border-t border-gray-200/60 pt-2.5 flex justify-between items-center text-xs font-black text-gray-800">
+                    <span>Total Amount</span>
+                    <span>₹{trackedOrder.items.reduce((sum: number, item: any) => sum + ((item.menuItem?.price || item.price || 0) * item.quantity), 0).toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Clear active order tracker if completed or rejected */}
+              {['delivered', 'rejected'].includes(trackedOrder.status) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveOrderId(null);
+                    setTrackedOrder(null);
+                    localStorage.removeItem('lastOnlineOrderId');
+                    setShowLiveTracker(false);
+                  }}
+                  className="w-full py-4 bg-slate-900 hover:bg-slate-950 text-white font-black rounded-2xl text-xs shadow-md transition-all active:scale-95 cursor-pointer"
+                >
+                  Clear Order & Return to Menu
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
