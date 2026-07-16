@@ -249,7 +249,7 @@ export function AppLayout({
                     )}
                   </div>
                 }
-                label="Self & Online"
+                label="Online"
                 active={activeTab === 'online_orders'}
                 onClick={() => setActiveTab('online_orders')}
               />
@@ -514,7 +514,7 @@ export function AppLayout({
                       )}
                     </div>
                   }
-                  label="Online/Self"
+                  label="Online"
                   active={activeTab === 'online_orders'}
                   onClick={() => { setActiveTab('online_orders'); setShowMobileMenu(false); }}
                 />

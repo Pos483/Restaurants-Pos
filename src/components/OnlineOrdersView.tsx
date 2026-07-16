@@ -133,7 +133,7 @@ export default function OnlineOrdersView() {
         <div>
           <h1 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2 uppercase tracking-wide">
             <Globe className="text-orange-500 animate-pulse" size={22} />
-            Self & Online Orders
+            Online Orders
           </h1>
           <p className="text-[11px] text-gray-400 dark:text-slate-500 font-bold uppercase mt-0.5 tracking-wider">
             Manage incoming dine-in table QR orders and home delivery/takeaway requests
