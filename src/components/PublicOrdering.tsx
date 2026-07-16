@@ -48,7 +48,6 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
   const [customerPhone, setCustomerPhone] = useState('');
   const [placingOrder, setPlacingOrder] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
-  const [paymentClicked, setPaymentClicked] = useState(false);
 
   // Force light mode for customer portal
   useEffect(() => {
@@ -273,6 +272,26 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
       alert('Please enter your name and phone number.');
       return;
     }
+
+    // ── Device-level rate limit (Layer 4 — localStorage) ──────────────────
+    // Only for online takeaway/delivery orders (table orders use PIN system)
+    if (!tableId) {
+      const RL_KEY = 'siyabill_order_timestamps';
+      const MAX_PER_HOUR = 10;
+      const now = Date.now();
+      const oneHourAgo = now - 60 * 60 * 1000;
+      let timestamps: number[] = JSON.parse(localStorage.getItem(RL_KEY) || '[]');
+      // Remove entries older than 1 hour
+      timestamps = timestamps.filter(t => t > oneHourAgo);
+      if (timestamps.length >= MAX_PER_HOUR) {
+        alert('Too many orders from this device. Please try again after some time.');
+        return;
+      }
+      // Record this attempt (committed after successful insert)
+      timestamps.push(now);
+      localStorage.setItem(RL_KEY, JSON.stringify(timestamps));
+    }
+
     setPlacingOrder(true);
 
     if (!supabase) {
@@ -344,6 +363,16 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
           return;
         }
 
+        // Fetch client IP for Supabase RLS rate limit enforcement
+        let clientIp: string | null = null;
+        try {
+          const ipRes = await fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(3000) });
+          const ipData = await ipRes.json();
+          clientIp = ipData.ip || null;
+        } catch {
+          // Non-critical: proceed without IP if fetch fails
+        }
+
         const { data, error } = await supabase.from('online_orders').insert({
           app_user_id: tenantId,
           customer_name: customerName,
@@ -352,7 +381,8 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
           delivery_address: orderType === 'delivery' ? deliveryAddress.trim() : null,
           pickup_time: orderType === 'takeaway' ? pickupTime.trim() : null,
           payment_method: 'UPI',
-          payment_status: 'pending', // cashier verifies soundbox receipt before approving
+          payment_status: 'pending',
+          client_ip: clientIp,
           items: cart.map(item => ({
             menuItem: {
               id: item.menuItem.id,
@@ -373,12 +403,15 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
           localStorage.setItem('lastOnlineOrderId', data.id);
           setActiveOrderId(data.id);
           setActiveMobileTab('track');
+
+          // Trigger UPI payment app intent automatically
+          const upiUrl = `upi://pay?pa=${restaurantUpiId || '8677994666@upi'}&pn=${encodeURIComponent(restaurantName)}&am=${cartSubtotal}&cu=INR`;
+          window.location.href = upiUrl;
         }
       }
 
       setOrderSuccess(true);
       setCart([]);
-      setPaymentClicked(false);
     } catch (err: any) {
       console.error('Order Placement Error:', err);
       alert('Failed to place order. Please try again.');
@@ -811,13 +844,17 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
                         </div>
 
                         <div className="flex flex-col gap-2.5 items-center justify-center">
-                          <a
-                            href={`upi://pay?pa=${restaurantUpiId || '8677994666@upi'}&pn=${encodeURIComponent(restaurantName)}&am=${cartSubtotal}&cu=INR`}
-                            onClick={() => setPaymentClicked(true)}
-                            className="w-full py-3 bg-gradient-to-r from-indigo-650 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white text-center rounded-2xl text-[10px] font-extrabold uppercase tracking-wider shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5 border border-indigo-500/10 cursor-pointer"
+                          <button
+                            type="submit"
+                            disabled={placingOrder}
+                            className="w-full py-4 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white text-center rounded-2xl text-[11px] font-black uppercase tracking-wider shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5 border border-blue-500/10 cursor-pointer"
                           >
-                            ⚡ Open GPay / PhonePe / Paytm
-                          </a>
+                            {placingOrder ? (
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              '⚡ Pay via UPI (GPay/PhonePe/Paytm)'
+                            )}
+                          </button>
 
                           <div className="hidden sm:block p-2 bg-white rounded-xl border border-gray-150 shadow-inner mt-1">
                             <QRCodeSVG
@@ -828,7 +865,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
                           </div>
 
                           <p className="text-[8.5px] text-slate-400 font-bold text-center leading-relaxed max-w-[240px]">
-                            Pay using the UPI button above. Once done, click the "Place Prepaid Order" button below to complete.
+                            Click the button above to pay and place your order. GPay, PhonePe, or Paytm will open automatically.
                           </p>
                         </div>
                       </div>
@@ -840,11 +877,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
                     <span className="text-sm font-black text-gray-900">₹{cartSubtotal.toFixed(2)}</span>
                   </div>
 
-                  {(!tableId && !paymentClicked) ? (
-                    <div className="text-center py-3.5 text-[10.5px] font-black text-orange-655 bg-orange-50 border border-orange-100/50 rounded-2xl uppercase tracking-wider shadow-inner animate-pulse">
-                      Tap UPI button above to pay first
-                    </div>
-                  ) : (
+                  {tableId && (
                     <button
                       type="submit"
                       disabled={placingOrder}
@@ -853,7 +886,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
                       {placingOrder ? (
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       ) : (
-                        tableId ? 'Place Order & Send to Kitchen' : 'Confirm & Place Prepaid Order'
+                        'Place Order & Send to Kitchen'
                       )}
                     </button>
                   )}
