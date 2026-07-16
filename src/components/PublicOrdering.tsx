@@ -982,7 +982,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
 
       {/* Floating Active Order Tracker bar */}
       {activeOrderId && trackedOrder && activeMobileTab !== 'track' && (
-        <div className="absolute bottom-18 left-4 right-4 bg-gradient-to-r from-slate-900 via-slate-850 to-indigo-950 text-white rounded-2xl p-4 flex justify-between items-center shadow-xl border border-white/5 animate-[pulse_3s_infinite] z-35">
+        <div className="absolute bottom-20 left-4 right-4 bg-gradient-to-r from-slate-900 via-slate-850 to-indigo-950 text-white rounded-2xl p-4 flex justify-between items-center shadow-xl border border-white/5 animate-[pulse_3s_infinite] z-35">
           <div className="flex items-center gap-3 text-xs font-black">
             <div className="p-2 bg-orange-500/10 rounded-xl text-orange-400">
               <Globe size={18} className="animate-[spin_4s_linear_infinite]" />
@@ -1004,7 +1004,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
 
       {/* Floating View Cart Trigger */}
       {totalCartItems > 0 && activeMobileTab !== 'cart' && (
-        <div className="absolute bottom-18 left-4 right-4 bg-gradient-to-r from-orange-500 to-rose-600 text-white rounded-2xl p-4.5 flex justify-between items-center shadow-lg shadow-orange-500/30 animate-[pulse_2.5s_infinite] z-30">
+        <div className="absolute bottom-20 left-4 right-4 bg-gradient-to-r from-orange-500 to-rose-600 text-white rounded-2xl p-4.5 flex justify-between items-center shadow-lg shadow-orange-500/30 animate-[pulse_2.5s_infinite] z-30">
           <div className="flex items-center gap-2 text-xs font-black">
             <ShoppingBag size={18} className="animate-bounce" />
             <span>{totalCartItems} Items | ₹{cartSubtotal.toFixed(2)}</span>
