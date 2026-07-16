@@ -735,7 +735,7 @@ export function AppLayout({
                             </button>
                             <button
                               onClick={() => handleAcceptOnlineOrder(ord)}
-                              className="flex-1 py-2 bg-green-650 hover:bg-green-755 text-white font-extrabold text-[10px] rounded-xl transition-all cursor-pointer flex justify-center items-center gap-1 shadow-md shadow-green-500/10 border border-white/5"
+                              className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white font-extrabold text-[10px] rounded-xl transition-all cursor-pointer flex justify-center items-center gap-1 shadow-md shadow-green-500/10 border border-white/5"
                             >
                               <CheckCircle2 size={12} />
                               Confirm & Print

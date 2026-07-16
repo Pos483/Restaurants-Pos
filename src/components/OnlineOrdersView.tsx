@@ -318,7 +318,7 @@ export default function OnlineOrdersView() {
                       </button>
                       <button
                         onClick={() => handleAcceptOnline(ord)}
-                        className="flex-1 py-2.5 bg-green-650 hover:bg-green-755 text-white font-black text-[10px] uppercase tracking-wider rounded-xl transition-all cursor-pointer flex justify-center items-center gap-1.5 shadow-md shadow-green-500/10 active:scale-95 border border-white/5"
+                        className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white font-black text-[10px] uppercase tracking-wider rounded-xl transition-all cursor-pointer flex justify-center items-center gap-1.5 shadow-md shadow-green-500/10 active:scale-95 border border-white/5"
                       >
                         <CheckCircle2 size={13} />
                         Accept & Print
