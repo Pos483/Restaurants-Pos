@@ -513,6 +513,12 @@ tbody tr {
   width: 150px;
 }
 
+/* Hide placeholder text when input is focused for cleaner typing experience */
+input:focus::placeholder,
+textarea:focus::placeholder {
+  color: transparent !important;
+}
+
 /* ═══════════════════════════════════════════════════════════
    🖨️  PRINT STYLES
    ═══════════════════════════════════════════════════════════ */
