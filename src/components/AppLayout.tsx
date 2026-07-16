@@ -11,6 +11,7 @@ import { useApp } from '../contexts/AppContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { SyncStatus, PrinterToast } from '../hooks/useAppSetup';
 import type { PremiumState } from '../hooks/usePremium';
+import { useToast } from './Toast';
 
 interface AppLayoutProps {
   isAppLocked: boolean;
@@ -43,6 +44,7 @@ export function AppLayout({
   const { toggleTheme, isDark } = useTheme();
   const [showProfileMenu, setShowProfileMenu] = React.useState(false);
   const [showMobileMenu, setShowMobileMenu] = React.useState(false);
+  const { showToast } = useToast();
 
   const [showPendingOrdersModal, setShowPendingOrdersModal] = useState(false);
   const selfOrders = useLiveQuery(() => db.selfOrders.toArray(), [], 'self_orders') || [];
@@ -197,9 +199,20 @@ export function AppLayout({
   const handleUpdateOnlineOrderStatus = async (orderId: string, newStatus: 'preparing' | 'dispatched' | 'delivered') => {
     try {
       await db.onlineOrders.update(orderId, { status: newStatus });
+      
+      if (newStatus === 'delivered') {
+        const orderObj = await db.onlineOrders.get(orderId);
+        if (orderObj) {
+          const { finalizeOnlineOrderAsBill } = await import('../db');
+          await finalizeOnlineOrderAsBill(orderObj);
+          showToast('Order marked as delivered and recorded in sales bills.', 'success');
+        }
+      }
+      
       notifyGlobalChange('online_orders');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to update online order status:', err);
+      showToast(err.message || 'Failed to update online order status.', 'error');
     }
   };
   const profileMenuRef = React.useRef<HTMLDivElement>(null);

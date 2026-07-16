@@ -1303,10 +1303,38 @@ export class ThermalPrinter {
         const separator = '-'.repeat(width) + '\n';
         const doubleSeparator = '='.repeat(width) + '\n';
 
+        const restaurantName = (settings?.restaurantName || 'RESTAURANT POS').toUpperCase();
+        let formattedName = '';
+        const words = restaurantName.split(' ');
+        let currentLine = '';
+        words.forEach((word: string) => {
+            if ((currentLine + word).length > (width / 2)) {
+                if (currentLine) {
+                    formattedName += currentLine.trim() + '\n';
+                    currentLine = word + ' ';
+                } else {
+                    formattedName += word.substring(0, width / 2) + '\n';
+                    currentLine = word.substring(width / 2) + ' ';
+                }
+            } else {
+                currentLine += word + ' ';
+            }
+        });
+        if (currentLine) formattedName += currentLine.trim() + '\n';
+
+        slip += CENTER + BOLD_ON + DOUBLE_HW_ON + formattedName + BOLD_OFF + DOUBLE_HEIGHT_OFF;
+        if (settings?.address && settings?.printAddress !== false) slip += CENTER + `${settings.address}\n`;
+        if (settings?.phone && settings?.printPhone !== false) slip += CENTER + `Ph: ${settings.phone}\n`;
+        if (settings?.email && settings?.printEmail !== false) slip += CENTER + `${settings.email}\n`;
+        if (settings?.fssaiNumber && settings?.printFssai !== false) slip += CENTER + `FSSAI: ${settings.fssaiNumber}\n`;
+        if (settings?.gstNumber && settings?.printGst !== false) slip += CENTER + `GSTIN: ${settings.gstNumber}\n`;
+
+        slip += separator;
+
         const title = order.orderType === 'delivery' ? 'ONLINE DELIVERY' : 'ONLINE TAKEAWAY';
-        slip += CENTER + BOLD_ON + DOUBLE_HW_ON + title + BOLD_OFF + DOUBLE_HEIGHT_OFF + '\n';
-        slip += CENTER + `Time: ${new Date(order.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\n`;
-        slip += doubleSeparator;
+        slip += CENTER + BOLD_ON + title + BOLD_OFF + '\n';
+        slip += CENTER + `Date/Time: ${new Date(order.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}\n`;
+        slip += separator;
 
         slip += BOLD_ON + `Customer Details:` + BOLD_OFF + '\n';
         slip += `Name : ${order.customerName}\n`;

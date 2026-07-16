@@ -66,7 +66,8 @@ export {
   revertStockForBill,
   revertCustomerCreditForBill,
   cancelBill,
-  clearAllLocalTables
+  clearAllLocalTables,
+  finalizeOnlineOrderAsBill
 } from './db/operations';
 
 // Helper re-export

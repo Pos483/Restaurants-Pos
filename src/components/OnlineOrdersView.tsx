@@ -123,6 +123,16 @@ export default function OnlineOrdersView() {
   const handleUpdateOnlineStatus = async (orderId: string, newStatus: 'preparing' | 'dispatched' | 'delivered') => {
     try {
       await db.onlineOrders.update(orderId, { status: newStatus });
+      
+      if (newStatus === 'delivered') {
+        const orderObj = await db.onlineOrders.get(orderId);
+        if (orderObj) {
+          const { finalizeOnlineOrderAsBill } = await import('../db');
+          await finalizeOnlineOrderAsBill(orderObj);
+          showToast('Order marked as delivered and recorded in sales bills.', 'success');
+        }
+      }
+      
       notifyGlobalChange('online_orders');
     } catch (err: any) {
       console.error('Failed to update online order status:', err);

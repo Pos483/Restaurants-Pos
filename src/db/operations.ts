@@ -249,3 +249,46 @@ export const clearAllLocalTables = async () => {
   keysToRemove.forEach(key => localStorage.removeItem(key));
   console.log('[DB] All local database tables cleared and sync timers reset');
 };
+
+export const finalizeOnlineOrderAsBill = async (order: any): Promise<void> => {
+  const existingBill = await db.bills.get(order.id);
+  if (existingBill) {
+    return; // Avoid duplicates
+  }
+
+  const subtotal = order.items.reduce((sum: number, item: any) => {
+    const price = item.menuItem?.price || item.price || 0;
+    return sum + (price * item.quantity);
+  }, 0);
+  
+  const billNumber = await getNextBillNumber();
+  const billTimestamp = Date.now();
+  const billId = order.id;
+  
+  await db.bills.add({
+    id: billId,
+    tableId: 'Online',
+    items: order.items,
+    subtotal: subtotal,
+    tax: 0,
+    total: subtotal,
+    paymentMethod: 'UPI',
+    timestamp: billTimestamp,
+    billNumber: billNumber,
+    discount: 0,
+    customerName: order.customerName,
+    customerPhone: order.customerPhone,
+    data: { 
+      orderType: order.orderType,
+      deliveryAddress: order.deliveryAddress,
+      pickupTime: order.pickupTime
+    }
+  });
+
+  try {
+    await deductStockForBill(billId, order.items, billNumber);
+  } catch (err) {
+    console.error('Failed to deduct stock for online order:', err);
+  }
+};
+
