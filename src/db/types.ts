@@ -183,3 +183,19 @@ export interface DBSelfOrder extends BaseDBRecord {
   status: 'pending' | 'approved' | 'rejected';
   timestamp: number;
 }
+
+export interface DBOnlineOrder extends BaseDBRecord {
+  id: string;
+  appUserId?: string;
+  customerName: string;
+  customerPhone: string;
+  orderType: 'delivery' | 'takeaway';
+  deliveryAddress?: string;
+  pickupTime?: string;
+  paymentMethod: 'UPI';
+  paymentStatus: 'pending' | 'paid';
+  items: OrderItem[];
+  status: 'pending' | 'accepted' | 'preparing' | 'dispatched' | 'delivered' | 'rejected';
+  estPrepTime?: number;
+  timestamp: number;
+}

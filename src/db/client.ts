@@ -107,6 +107,10 @@ localDb.version(6).stores({
   self_orders: 'id, tableId, status'
 });
 
+localDb.version(7).stores({
+  online_orders: 'id, status, customerPhone'
+});
+
 export function useLiveQuery<T>(
   querier: () => T | Promise<T>,
   deps: any[] = [],

@@ -16,7 +16,8 @@ import {
   DBCustomerTransaction,
   DBPosCustomer,
   DBExpense,
-  DBSelfOrder
+  DBSelfOrder,
+  DBOnlineOrder
 } from './types';
 
 export class HybridTable<T extends BaseDBRecord> {
@@ -556,6 +557,40 @@ const selfOrdersTable = new HybridTable<DBSelfOrder>(
   true // onlineOnly: true
 );
 
+const onlineOrdersTable = new HybridTable<DBOnlineOrder>(
+  'online_orders',
+  (o, uid) => ({
+    app_user_id: uid,
+    id: o.id,
+    customer_name: o.customerName,
+    customer_phone: o.customerPhone,
+    order_type: o.orderType,
+    delivery_address: o.deliveryAddress ?? null,
+    pickup_time: o.pickupTime ?? null,
+    payment_method: o.paymentMethod,
+    payment_status: o.paymentStatus,
+    items: o.items,
+    status: o.status,
+    est_prep_time: o.estPrepTime ?? null,
+    timestamp: o.timestamp
+  }),
+  (r) => ({
+    id: r.id,
+    customerName: r.customer_name,
+    customerPhone: r.customer_phone,
+    orderType: r.order_type as any,
+    deliveryAddress: r.delivery_address ?? undefined,
+    pickupTime: r.pickup_time ?? undefined,
+    paymentMethod: r.payment_method as any,
+    paymentStatus: r.payment_status as any,
+    items: r.items ?? [],
+    status: r.status as any,
+    estPrepTime: r.est_prep_time ? Number(r.est_prep_time) : undefined,
+    timestamp: Number(r.timestamp)
+  }),
+  true // onlineOnly: true
+);
+
 const stockItemsTable = new HybridTable<DBStockItem>(
   'stock_items',
   (s, uid) => ({ app_user_id: uid, id: s.id, name: s.name, quantity: s.quantity, unit: s.unit, min_threshold: s.minThreshold, last_updated: s.lastUpdated, updated_at: new Date().toISOString() }),
@@ -643,6 +678,7 @@ export const db = {
   expenses: expensesTable,
   posCustomers: posCustomersTable,
   selfOrders: selfOrdersTable,
+  onlineOrders: onlineOrdersTable,
   deletedRecords: { add: async () => {}, toArray: async () => [] } as any,
 };
 
@@ -664,6 +700,7 @@ export const getTable = (tableName: string): HybridTable<BaseDBRecord> | undefin
     case 'expenses': return db.expenses as unknown as HybridTable<BaseDBRecord>;
     case 'pos_customers': return db.posCustomers as unknown as HybridTable<BaseDBRecord>;
     case 'self_orders': return db.selfOrders as unknown as HybridTable<BaseDBRecord>;
+    case 'online_orders': return db.onlineOrders as unknown as HybridTable<BaseDBRecord>;
     default: return undefined;
   }
 };
