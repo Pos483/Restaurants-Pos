@@ -460,11 +460,11 @@ export default function OnlineOrdersView() {
                     <div className="flex justify-between items-start border-b border-gray-100 dark:border-slate-800/60 pb-3">
                       <div className="flex gap-2 flex-wrap">
                         <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                          (ord.orderType || ord.order_type) === 'delivery'
+                          ord.orderType === 'delivery'
                             ? 'bg-blue-50 text-blue-700 border-blue-100/50 dark:bg-blue-950/30 dark:text-blue-400'
                             : 'bg-amber-50 text-amber-800 border-amber-100/50 dark:bg-amber-950/30 dark:text-amber-400'
                         }`}>
-                          {(ord.orderType || ord.order_type) === 'delivery' ? 'Home Delivery' : 'Takeaway'}
+                          {ord.orderType === 'delivery' ? 'Home Delivery' : 'Takeaway'}
                         </span>
                         <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
                           isDelivered
@@ -485,10 +485,10 @@ export default function OnlineOrdersView() {
                     {/* Customer info */}
                     <div className="text-xs font-bold text-gray-650 dark:text-slate-350 flex flex-col gap-1.5 bg-slate-50 dark:bg-slate-950/20 p-3 rounded-2xl border border-gray-100 dark:border-slate-800/40">
                       <p className="flex items-center gap-1.5"><User size={13} className="text-gray-400" /> {ord.customerName} ({ord.customerPhone})</p>
-                      {(ord.orderType || ord.order_type) === 'delivery' && ord.deliveryAddress && (
+                      {ord.orderType === 'delivery' && ord.deliveryAddress && (
                         <p className="flex items-start gap-1.5"><MapPin size={13} className="text-gray-400 mt-0.5 shrink-0" /> {ord.deliveryAddress}</p>
                       )}
-                      {(ord.orderType || ord.order_type) === 'takeaway' && ord.pickupTime && (
+                      {ord.orderType === 'takeaway' && ord.pickupTime && (
                         <p className="flex items-center gap-1.5"><Clock size={13} className="text-gray-400" /> Pickup: {ord.pickupTime}</p>
                       )}
                     </div>
