@@ -69,6 +69,18 @@ function SubTabButton({ active, onClick, icon, label, badge }: SubTabButtonProps
   );
 }
 
+const getPublicOrderingUrl = (restaurantCode: string | undefined, tableId?: string | number) => {
+  if (!restaurantCode) return '';
+  const siteUrl = import.meta.env.VITE_SITE_URL || 'https://siyabill.vercel.app';
+  let baseOrigin = window.location.origin;
+  if (baseOrigin.startsWith('app://') || baseOrigin.startsWith('file://') || baseOrigin.includes('localhost')) {
+    baseOrigin = siteUrl;
+  }
+  return tableId 
+    ? `${baseOrigin}/?r=${restaurantCode}&t=${tableId}`
+    : `${baseOrigin}/?r=${restaurantCode}`;
+};
+
 export default function RestaurantSettings() {
   const premiumState = usePremium();
   const { categoryLayout: currentLayout, setCategoryLayout } = useApp();
@@ -333,7 +345,7 @@ export default function RestaurantSettings() {
       showToast('Please set your Restaurant Code in Profile Settings first.', 'error');
       return;
     }
-    const orderUrl = `${window.location.origin}/?r=${restaurantCode}`;
+    const orderUrl = getPublicOrderingUrl(restaurantCode);
     
     try {
       const QRCode = (await import('qrcode')).default;
@@ -1388,7 +1400,7 @@ export default function RestaurantSettings() {
                   {/* Left Side: QR Code */}
                   <div className="bg-white p-3.5 rounded-2xl border border-gray-150 shadow-inner shrink-0">
                     <QRCodeSVG
-                      value={`${window.location.origin}/?r=${globalSettings.restaurantCode}`}
+                      value={getPublicOrderingUrl(globalSettings.restaurantCode)}
                       size={120}
                       level="H"
                       includeMargin={false}
@@ -1412,13 +1424,13 @@ export default function RestaurantSettings() {
                     {/* Copy Link Input group */}
                     <div className="flex flex-col sm:flex-row gap-2 max-w-lg w-full">
                       <div className="flex-1 px-4 py-2.5 bg-slate-100 dark:bg-slate-950 rounded-xl border border-gray-150 dark:border-slate-850 text-xs font-bold text-gray-500 dark:text-slate-400 select-all truncate">
-                        {`${window.location.origin}/?r=${globalSettings.restaurantCode}`}
+                        {getPublicOrderingUrl(globalSettings.restaurantCode)}
                       </div>
                       <div className="flex gap-2">
                         <button
                           type="button"
                           onClick={() => {
-                            navigator.clipboard.writeText(`${window.location.origin}/?r=${globalSettings.restaurantCode}`);
+                            navigator.clipboard.writeText(getPublicOrderingUrl(globalSettings.restaurantCode));
                             setCopiedLink(true);
                             setTimeout(() => setCopiedLink(false), 2000);
                           }}
@@ -1445,7 +1457,7 @@ export default function RestaurantSettings() {
               {globalSettings?.restaurantCode && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                   {tables.map((tbl) => {
-                    const orderUrl = `${window.location.origin}/?r=${globalSettings.restaurantCode}&t=${tbl.id}`;
+                    const orderUrl = getPublicOrderingUrl(globalSettings.restaurantCode, tbl.id);
                     return (
                       <div key={tbl.id} className="bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-800/80 rounded-2xl p-5 flex flex-col items-center gap-4 shadow-sm hover:shadow-md transition-all">
                         <div className="font-extrabold text-sm text-gray-850 dark:text-slate-100">
