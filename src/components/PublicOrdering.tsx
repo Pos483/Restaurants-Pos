@@ -899,7 +899,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
         {/* TAB 4: TRACK ORDER VIEW */}
         {activeMobileTab === 'track' && (
           <div className="flex-1 flex flex-col overflow-hidden p-5 animate-fade-in bg-slate-50/20">
-            {!activeOrderId || !trackedOrder ? (
+            {!trackedOrder ? (
               <div className="flex-1 flex flex-col items-center justify-center p-6 text-center select-none bg-white rounded-2xl border border-gray-150 animate-fade-in">
                 <div className="w-16 h-16 bg-slate-100 text-gray-400 rounded-2xl flex items-center justify-center border border-gray-150 shadow-inner mb-4">
                   <Globe size={28} />
@@ -916,7 +916,108 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
                   Go to Menu
                 </button>
               </div>
+            ) : trackedOrder.status === 'delivered' ? (
+              /* ── COMPLETED ORDER VIEW ─────────────────────────────────── */
+              <div className="flex-1 overflow-y-auto flex flex-col gap-5 scrollbar-hide pb-20">
+                {/* Celebration Banner */}
+                <div className="bg-gradient-to-br from-emerald-50 to-green-100 border border-emerald-200/60 rounded-2xl p-5 flex flex-col items-center text-center gap-2 shadow-sm">
+                  <div className="w-14 h-14 bg-emerald-500 rounded-full flex items-center justify-center shadow-md shadow-emerald-500/30 mb-1">
+                    <CheckCircle size={28} className="text-white" />
+                  </div>
+                  <h3 className="font-black text-emerald-800 text-sm">Order Completed! 🎉</h3>
+                  <p className="text-[10.5px] text-emerald-700 font-bold max-w-[220px] leading-relaxed">
+                    {trackedOrder.order_type === 'delivery'
+                      ? 'Your order has been delivered successfully. Enjoy your meal!'
+                      : 'Your order is ready! Please collect it from the counter. Enjoy your meal!'}
+                  </p>
+                  <div className="mt-1 flex flex-col gap-1 text-[9px] text-emerald-600 font-black uppercase tracking-wider">
+                    <span>📞 {trackedOrder.customer_phone} &nbsp;|&nbsp; 👤 {trackedOrder.customer_name}</span>
+                    {trackedOrder.order_type === 'delivery' && trackedOrder.delivery_address && (
+                      <span>📍 {trackedOrder.delivery_address}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Order Summary */}
+                <div className="flex flex-col gap-3">
+                  <h4 className="text-[10px] font-black uppercase text-gray-455 tracking-wider">Order Summary</h4>
+                  <div className="border border-gray-150 rounded-2xl p-4 flex flex-col gap-2.5 bg-white shadow-sm">
+                    {trackedOrder.items.map((item: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-center text-xs font-extrabold text-gray-700">
+                        <span>{item.menuItem?.name || item.name} <span className="text-orange-550 font-black">x{item.quantity}</span></span>
+                        <span>₹{((item.menuItem?.price || item.price || 0) * item.quantity).toFixed(2)}</span>
+                      </div>
+                    ))}
+                    <div className="border-t border-gray-200/60 pt-2.5 flex justify-between items-center text-xs font-black text-gray-800">
+                      <span>Total Paid</span>
+                      <span className="text-emerald-600">₹{trackedOrder.items.reduce((sum: number, item: any) => sum + ((item.menuItem?.price || item.price || 0) * item.quantity), 0).toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payment info */}
+                <div className="bg-blue-50/60 border border-blue-100/60 rounded-2xl p-3.5 flex justify-between items-center text-[10px] font-black">
+                  <span className="text-blue-700 uppercase tracking-wider">Payment Method</span>
+                  <span className="text-blue-800 bg-blue-100 px-2.5 py-1 rounded-lg">UPI ✓</span>
+                </div>
+
+                {/* Place New Order button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveOrderId(null);
+                    setTrackedOrder(null);
+                    localStorage.removeItem('lastOnlineOrderId');
+                    setActiveMobileTab('menu');
+                  }}
+                  className="w-full py-4 bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700 text-white font-black rounded-2xl text-xs shadow-md shadow-orange-400/20 transition-all active:scale-95 cursor-pointer"
+                >
+                  🍽️ Place New Order
+                </button>
+              </div>
+            ) : trackedOrder.status === 'rejected' ? (
+              /* ── REJECTED ORDER VIEW ──────────────────────────────────── */
+              <div className="flex-1 overflow-y-auto flex flex-col gap-5 scrollbar-hide pb-20">
+                {/* Rejection Banner */}
+                <div className="bg-red-50 border border-red-200/50 rounded-2xl p-5 flex flex-col items-center text-center gap-2 shadow-sm">
+                  <div className="w-14 h-14 bg-red-500 rounded-full flex items-center justify-center shadow-md shadow-red-400/30 mb-1">
+                    <XCircle size={28} className="text-white" />
+                  </div>
+                  <h3 className="font-black text-red-800 text-sm">Order Rejected</h3>
+                  <p className="text-[10.5px] text-red-700 font-bold max-w-[240px] leading-relaxed">
+                    This order was rejected by the restaurant. Please contact the restaurant directly or try placing a new order.
+                  </p>
+                </div>
+
+                {/* Order Summary */}
+                <div className="flex flex-col gap-3">
+                  <h4 className="text-[10px] font-black uppercase text-gray-455 tracking-wider">Rejected Order Items</h4>
+                  <div className="border border-gray-150 rounded-2xl p-4 flex flex-col gap-2.5 bg-white shadow-sm">
+                    {trackedOrder.items.map((item: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-center text-xs font-extrabold text-gray-500">
+                        <span className="line-through">{item.menuItem?.name || item.name} x{item.quantity}</span>
+                        <span className="line-through">₹{((item.menuItem?.price || item.price || 0) * item.quantity).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Try Again button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveOrderId(null);
+                    setTrackedOrder(null);
+                    localStorage.removeItem('lastOnlineOrderId');
+                    setActiveMobileTab('menu');
+                  }}
+                  className="w-full py-4 bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700 text-white font-black rounded-2xl text-xs shadow-md shadow-orange-400/20 transition-all active:scale-95 cursor-pointer"
+                >
+                  🔄 Try Again — Place New Order
+                </button>
+              </div>
             ) : (
+              /* ── LIVE TRACKING VIEW ───────────────────────────────────── */
               <div className="flex-1 overflow-y-auto flex flex-col gap-6 scrollbar-hide text-gray-850 pb-20">
                 {/* Visual Tracker Status Progress Steps */}
                 <div className="flex flex-col gap-4 bg-white border border-gray-100 p-4.5 rounded-2xl shadow-sm">
@@ -959,10 +1060,10 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
                     </div>
                     <div>
                       <h4 className="text-xs font-black text-gray-800">
-                        {trackedOrder.orderType === 'delivery' ? 'Out for Delivery' : 'Ready for Takeaway'}
+                        {trackedOrder.order_type === 'delivery' ? 'Out for Delivery' : 'Ready for Takeaway'}
                       </h4>
                       <p className="text-[9px] text-gray-400 font-bold">
-                        {trackedOrder.orderType === 'delivery'
+                        {trackedOrder.order_type === 'delivery'
                           ? 'Rider has picked up your order'
                           : 'Please visit the counter to pick up your order'}
                       </p>
@@ -972,10 +1073,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
                   <div className="w-0.5 h-4 bg-gray-200 ml-4" />
 
                   <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shadow-sm ${
-                      trackedOrder.status === 'delivered'
-                        ? 'bg-emerald-500 text-white font-black' : 'bg-gray-200 text-gray-400 font-bold'
-                    }`}>
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shadow-sm bg-gray-200 text-gray-400">
                       ✓
                     </div>
                     <div>
@@ -984,18 +1082,6 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
                     </div>
                   </div>
                 </div>
-
-                {/* Order Status banner if rejected */}
-                {trackedOrder.status === 'rejected' && (
-                  <div className="bg-red-50 border border-red-200/50 text-red-650 p-4.5 rounded-2xl flex flex-col gap-1.5 shadow-sm">
-                    <h4 className="text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
-                      <XCircle size={14} /> Order Rejected
-                    </h4>
-                    <p className="text-[10px] font-bold">
-                      This order was rejected. Please contact the restaurant directly to clarify or adjust payment details.
-                    </p>
-                  </div>
-                )}
 
                 {/* Order Items List details */}
                 <div className="flex flex-col gap-3">
@@ -1013,21 +1099,6 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
                     </div>
                   </div>
                 </div>
-
-                {/* Clear active order tracker if completed or rejected */}
-                {['delivered', 'rejected'].includes(trackedOrder.status) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveOrderId(null);
-                      setTrackedOrder(null);
-                      localStorage.removeItem('lastOnlineOrderId');
-                    }}
-                    className="w-full py-4 bg-slate-900 hover:bg-slate-950 text-white font-black rounded-2xl text-xs shadow-md transition-all active:scale-95 cursor-pointer"
-                  >
-                    Clear Order & Return to Menu
-                  </button>
-                )}
               </div>
             )}
           </div>
