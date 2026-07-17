@@ -8,6 +8,8 @@ import { OrderItem } from './types';
 import { Unplug } from 'lucide-react';
 import { logger } from './utils/logger';
 import PageLoader from './components/PageLoader';
+import { useToast } from './components/Toast';
+
 
 // ── Eager imports (needed on first render) ───────────────────────────────────
 import Dashboard from './components/Dashboard';
@@ -45,7 +47,20 @@ export default function App() {
     handleRateLimitError, checkBlockStatus,
   } = setup;
 
+  const { showToast } = useToast();
   const [selectedTableId, setSelectedTableId] = useState<number | null>(null);
+
+  // Listen to local cart decryption failure
+  useEffect(() => {
+    const handleCartDecryptionFailed = () => {
+      showToast('⚠️ Local Cart security check fail ho gaya. Cart data decrypt nahi ho saka (Shayad local session key change hui hai).', 'error');
+    };
+    window.addEventListener('cart-decryption-failed', handleCartDecryptionFailed);
+    return () => {
+      window.removeEventListener('cart-decryption-failed', handleCartDecryptionFailed);
+    };
+  }, [showToast]);
+
 
   const tables = useLiveQuery(() => db.activeOrders.toArray(), [], 'active_orders') || [];
 

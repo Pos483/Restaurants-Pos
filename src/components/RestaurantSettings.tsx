@@ -952,7 +952,11 @@ export default function RestaurantSettings() {
                         </div>
                       </div>
                       <button 
-                        onClick={() => ThermalPrinter.connect(true).then(checkPrinters).catch(checkPrinters)}
+                        onClick={() => {
+                          ThermalPrinter.connect(true)
+                            .then(() => { checkPrinters(); showToast('Printer connected successfully!', 'success'); })
+                            .catch((err: any) => { checkPrinters(); showToast(err?.message || 'Printer connection failed.', 'error'); });
+                        }}
                         className={`w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 border border-indigo-500/10 text-white rounded-xl font-bold text-[10px] transition-all cursor-pointer active:scale-95 shadow-sm shrink-0 uppercase tracking-wider`}
                       >
                         {printerStatus.generic ? 'Reconnect' : 'Connect'}
@@ -995,7 +999,11 @@ export default function RestaurantSettings() {
                           </div>
                         </div>
                         <button 
-                          onClick={() => ThermalPrinter.connectReceipt(true).then(checkPrinters).catch(checkPrinters)}
+                          onClick={() => {
+                            ThermalPrinter.connectReceipt(true)
+                              .then(() => { checkPrinters(); showToast('Receipt printer connected successfully!', 'success'); })
+                              .catch((err: any) => { checkPrinters(); showToast(err?.message || 'Receipt printer connection failed.', 'error'); });
+                          }}
                           className={`w-full py-2 rounded-xl font-bold text-[9px] transition-all cursor-pointer active:scale-95 shadow-sm border uppercase tracking-wider ${
                             printerStatus.receipt
                               ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500 hover:text-white'
@@ -1041,7 +1049,11 @@ export default function RestaurantSettings() {
                           </div>
                         </div>
                         <button 
-                          onClick={() => ThermalPrinter.connectKOT(true).then(checkPrinters).catch(checkPrinters)}
+                          onClick={() => {
+                            ThermalPrinter.connectKOT(true)
+                              .then(() => { checkPrinters(); showToast('Kitchen printer connected successfully!', 'success'); })
+                              .catch((err: any) => { checkPrinters(); showToast(err?.message || 'Kitchen printer connection failed.', 'error'); });
+                          }}
                           className={`w-full py-2 rounded-xl font-bold text-[9px] transition-all cursor-pointer active:scale-95 shadow-sm border uppercase tracking-wider ${
                             printerStatus.kot
                               ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500 hover:text-white'
@@ -1087,7 +1099,11 @@ export default function RestaurantSettings() {
                           </div>
                         </div>
                         <button 
-                          onClick={() => ThermalPrinter.connectBar(true).then(checkPrinters).catch(checkPrinters)}
+                          onClick={() => {
+                            ThermalPrinter.connectBar(true)
+                              .then(() => { checkPrinters(); showToast('Bar printer connected successfully!', 'success'); })
+                              .catch((err: any) => { checkPrinters(); showToast(err?.message || 'Bar printer connection failed.', 'error'); });
+                          }}
                           className={`w-full py-2 rounded-xl font-bold text-[9px] transition-all cursor-pointer active:scale-95 shadow-sm border uppercase tracking-wider ${
                             printerStatus.bar
                               ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500 hover:text-white'

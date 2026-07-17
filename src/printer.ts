@@ -187,6 +187,30 @@ export class ThermalPrinter {
     }
   }
 
+
+  private static getReadablePrinterError(err: any): string {
+    if (!err) return 'Unknown printer connection error.';
+    const msg = err.message || String(err);
+    const name = err.name || '';
+    
+    if (name === 'SecurityError' || msg.includes('Access denied') || msg.includes('locked')) {
+      return 'Printer Port (COM) lock ho gaya hai. Kripya check karein ki koi aur software (jaise dusra driver ya utility) is COM port ko connect to nahi kiya hai.';
+    }
+    if (name === 'NetworkError' || msg.includes('device disconnected') || msg.includes('Failed to open')) {
+      return 'Printer connection drop ho gaya hai. Kripya printer switch on karein aur check karein ki serial cable securely plugged hai.';
+    }
+    if (name === 'InvalidStateError' || msg.includes('already open')) {
+      return 'Printer port system me open/connected state me hai.';
+    }
+    if (name === 'NotFoundError' || msg.includes('No port selected')) {
+      return 'Printer connect karne ke liye koi valid serial port select nahi kiya gaya.';
+    }
+    if (msg.includes('bluetooth') || msg.includes('GATT') || msg.includes('characteristic')) {
+      return 'Bluetooth connection setup fail ho gaya hai. Kripya verification settings check karein aur range verify karein.';
+    }
+    return `Printer Error: ${msg}`;
+  }
+
   static async autoConnect() {
     try {
       if (!('serial' in navigator)) return false;
@@ -358,10 +382,10 @@ export class ThermalPrinter {
       }
 
       return true;
-    } catch (err) {
+    } catch (err: any) {
       logger.error('Error connecting to printer:', err);
       this.port = null;
-      throw err;
+      throw new Error(ThermalPrinter.getReadablePrinterError(err));
     }
   }
 
@@ -438,10 +462,10 @@ export class ThermalPrinter {
       }
 
       return true;
-    } catch (err) {
+    } catch (err: any) {
       logger.error('Error connecting to receipt printer:', err);
       this.receiptPort = null;
-      throw err;
+      throw new Error(ThermalPrinter.getReadablePrinterError(err));
     }
   }
 
@@ -518,10 +542,10 @@ export class ThermalPrinter {
       }
 
       return true;
-    } catch (err) {
+    } catch (err: any) {
       logger.error('Error connecting to KOT printer:', err);
       this.kotPort = null;
-      throw err;
+      throw new Error(ThermalPrinter.getReadablePrinterError(err));
     }
   }
 
@@ -598,10 +622,10 @@ export class ThermalPrinter {
       }
 
       return true;
-    } catch (err) {
+    } catch (err: any) {
       logger.error('Error connecting to Bar printer:', err);
       this.barPort = null;
-      throw err;
+      throw new Error(ThermalPrinter.getReadablePrinterError(err));
     }
   }
 

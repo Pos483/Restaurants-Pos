@@ -36,12 +36,19 @@ async function loadCartFromDexie(userId: string): Promise<OrderItem[]> {
     }
     
     if (row.encryptedData) {
-      const decrypted = await decryptText(row.encryptedData);
-      return JSON.parse(decrypted);
+      try {
+        const decrypted = await decryptText(row.encryptedData);
+        return JSON.parse(decrypted);
+      } catch (decryptErr) {
+        logger.error('[Cart] Decryption/Parsing failed:', decryptErr);
+        window.dispatchEvent(new CustomEvent('cart-decryption-failed', { detail: { userId } }));
+        throw decryptErr;
+      }
     }
     return [];
-  } catch {
-    return [];
+  } catch (e) {
+    logger.error('[Cart] Failed to load cart:', e);
+    throw e;
   }
 }
 
@@ -61,6 +68,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [cart, setCart] = useState<OrderItem[]>([]);
+  const [cartLoaded, setCartLoaded] = useState(false);
   const [isRecoveryMode, setIsRecoveryMode] = useState(false);
   const [categoryLayout, setCategoryLayoutState] = useState<'top' | 'sidebar'>(
     (localStorage.getItem('categoryLayout') as 'top' | 'sidebar') || 'sidebar'
@@ -154,25 +162,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const userId = user?.id;
     if (!userId) {
       setCart([]);
+      setCartLoaded(false);
       cartUserIdRef.current = null;
       return;
     }
     cartUserIdRef.current = userId;
-    loadCartFromDexie(userId).then(items => {
-      // Only apply if the user hasn't changed again while we were loading
-      if (cartUserIdRef.current === userId) {
-        setCart(items);
-      }
-    });
+    setCartLoaded(false);
+    loadCartFromDexie(userId)
+      .then(items => {
+        // Only apply if the user hasn't changed again while we were loading
+        if (cartUserIdRef.current === userId) {
+          setCart(items);
+          setCartLoaded(true);
+        }
+      })
+      .catch(() => {
+        if (cartUserIdRef.current === userId) {
+          setCart([]);
+          setCartLoaded(true);
+        }
+      });
   }, [user]);
 
   // ── Cart — Save to Dexie whenever cart changes ────────────────────────────
 
   useEffect(() => {
     const userId = user?.id;
-    if (!userId) return;
+    if (!userId || !cartLoaded) return;
     saveCartToDexie(userId, cart);
-  }, [cart, user]);
+  }, [cart, user, cartLoaded]);
 
   // ── clearCart ─────────────────────────────────────────────────────────────
 

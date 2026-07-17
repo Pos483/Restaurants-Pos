@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import Dexie from 'dexie';
 import { OrderItem } from '../types';
 
@@ -111,17 +111,17 @@ localDb.version(7).stores({
   online_orders: 'id, status, customerPhone'
 });
 
+import { useLiveQuery as dexieUseLiveQuery } from 'dexie-react-hooks';
+
 export function useLiveQuery<T>(
   querier: () => T | Promise<T>,
   deps: any[] = [],
-  tableNames: string | string[]
+  tableNames?: string | string[]
 ): T | undefined {
-  const [data, setData] = useState<T | undefined>(undefined);
   const [tick, setTick] = useState(0);
-  const querierRef = useRef(querier);
-  querierRef.current = querier;
 
   useEffect(() => {
+    if (!tableNames) return;
     const onChanged = () => setTick(v => v + 1);
 
     // Determine target tables
@@ -146,21 +146,6 @@ export function useLiveQuery<T>(
     };
   }, [tableNames]);
 
-  const userId = getUserId();
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const result = await querierRef.current();
-        if (!cancelled) setData(result as T);
-      } catch (err) {
-        console.error('[useLiveQuery] Error:', err);
-      }
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tick, userId, ...deps]);
-
-  return data;
+  return dexieUseLiveQuery(querier, [...deps, tick]);
 }
+
