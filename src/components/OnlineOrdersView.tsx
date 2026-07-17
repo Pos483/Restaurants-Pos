@@ -8,7 +8,7 @@ import { useToast } from './Toast';
 
 export default function OnlineOrdersView() {
   const { showToast } = useToast();
-  const [activeSubTab, setActiveSubTab] = useState<'pending_dinein' | 'pending_online' | 'active_online'>('pending_dinein');
+  const [activeSubTab, setActiveSubTab] = useState<'pending_dinein' | 'pending_online' | 'active_online' | 'completed_online'>('pending_dinein');
 
   // Load Self Orders (Dine-in Tables)
   const selfOrders = useLiveQuery(() => db.selfOrders.toArray(), [], 'self_orders') || [];
@@ -18,6 +18,9 @@ export default function OnlineOrdersView() {
   const onlineOrders = useLiveQuery(() => db.onlineOrders.toArray(), [], 'online_orders') || [];
   const pendingOnline = onlineOrders.filter(o => o.status === 'pending');
   const activeOnline = onlineOrders.filter(o => ['accepted', 'preparing', 'dispatched'].includes(o.status));
+  const completedOnline = onlineOrders
+    .filter(o => ['delivered', 'rejected'].includes(o.status))
+    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)); // newest first
 
   // Handler to accept Dine-in Self Order
   const handleApproveDineIn = async (order: any) => {
@@ -199,6 +202,16 @@ export default function OnlineOrdersView() {
           }`}
         >
           Active Tracking ({activeOnline.length})
+        </button>
+        <button
+          onClick={() => setActiveSubTab('completed_online')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+            activeSubTab === 'completed_online'
+              ? 'bg-white dark:bg-slate-850 text-slate-700 dark:text-slate-200 shadow-xs border border-gray-200/10'
+              : 'text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-350'
+          }`}
+        >
+          Completed ({completedOnline.length})
         </button>
       </div>
 
@@ -417,6 +430,85 @@ export default function OnlineOrdersView() {
                           {ord.orderType === 'delivery' ? 'Mark Delivered' : 'Mark Picked Up'}
                         </button>
                       )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )
+        )}
+
+        {/* Completed Online Orders tab */}
+        {activeSubTab === 'completed_online' && (
+          completedOnline.length === 0 ? (
+            <div className="h-64 flex flex-col items-center justify-center text-center gap-3">
+              <CheckCircle2 size={36} className="text-gray-300 dark:text-slate-700" />
+              <p className="text-xs font-extrabold text-gray-400 dark:text-slate-500">No completed orders yet today.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {completedOnline.map((ord) => {
+                const totalAmt = ord.items.reduce((sum: number, item: any) => sum + ((item.menuItem?.price || item.price || 0) * item.quantity), 0);
+                const isDelivered = ord.status === 'delivered';
+                return (
+                  <div key={ord.id} className={`bg-white dark:bg-slate-900 border rounded-3xl p-5 shadow-sm flex flex-col gap-4 ${
+                    isDelivered
+                      ? 'border-emerald-200/60 dark:border-emerald-900/30'
+                      : 'border-red-200/60 dark:border-red-900/30'
+                  }`}>
+                    {/* Header */}
+                    <div className="flex justify-between items-start border-b border-gray-100 dark:border-slate-800/60 pb-3">
+                      <div className="flex gap-2 flex-wrap">
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                          (ord.orderType || ord.order_type) === 'delivery'
+                            ? 'bg-blue-50 text-blue-700 border-blue-100/50 dark:bg-blue-950/30 dark:text-blue-400'
+                            : 'bg-amber-50 text-amber-800 border-amber-100/50 dark:bg-amber-950/30 dark:text-amber-400'
+                        }`}>
+                          {(ord.orderType || ord.order_type) === 'delivery' ? 'Home Delivery' : 'Takeaway'}
+                        </span>
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                          isDelivered
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200/50 dark:bg-emerald-950/30 dark:text-emerald-400'
+                            : 'bg-red-50 text-red-700 border-red-200/50 dark:bg-red-950/30 dark:text-red-400'
+                        }`}>
+                          {isDelivered ? '✓ Delivered' : '✕ Rejected'}
+                        </span>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-xs font-black text-gray-900 dark:text-white">₹{totalAmt.toFixed(2)}</p>
+                        <p className="text-[9px] text-gray-400 dark:text-slate-500 font-bold mt-0.5">
+                          {new Date(ord.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Customer info */}
+                    <div className="text-xs font-bold text-gray-650 dark:text-slate-350 flex flex-col gap-1.5 bg-slate-50 dark:bg-slate-950/20 p-3 rounded-2xl border border-gray-100 dark:border-slate-800/40">
+                      <p className="flex items-center gap-1.5"><User size={13} className="text-gray-400" /> {ord.customerName} ({ord.customerPhone})</p>
+                      {(ord.orderType || ord.order_type) === 'delivery' && ord.deliveryAddress && (
+                        <p className="flex items-start gap-1.5"><MapPin size={13} className="text-gray-400 mt-0.5 shrink-0" /> {ord.deliveryAddress}</p>
+                      )}
+                      {(ord.orderType || ord.order_type) === 'takeaway' && ord.pickupTime && (
+                        <p className="flex items-center gap-1.5"><Clock size={13} className="text-gray-400" /> Pickup: {ord.pickupTime}</p>
+                      )}
+                    </div>
+
+                    {/* Items list */}
+                    <div className="flex-1 flex flex-col gap-2 pl-1.5">
+                      {ord.items.map((item: any, idx: number) => (
+                        <div key={idx} className={`flex justify-between items-center text-[11px] font-bold ${
+                          isDelivered ? 'text-gray-650 dark:text-slate-300' : 'text-gray-400 dark:text-slate-500 line-through'
+                        }`}>
+                          <span>{item.menuItem?.name || item.name} <span className={`font-black ${isDelivered ? 'text-emerald-600' : 'text-red-400'}`}>x{item.quantity}</span></span>
+                          <span>₹{((item.menuItem?.price || item.price || 0) * item.quantity).toFixed(2)}</span>
+                        </div>
+                      ))}
+                      <div className="border-t border-gray-100 dark:border-slate-800/40 pt-2 flex justify-between text-[11px] font-black">
+                        <span className="text-gray-500 dark:text-slate-400">{isDelivered ? 'Total Paid' : 'Total (Rejected)'}</span>
+                        <span className={isDelivered ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}>
+                          ₹{totalAmt.toFixed(2)}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 );
