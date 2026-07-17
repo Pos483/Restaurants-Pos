@@ -48,6 +48,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
   const [customerPhone, setCustomerPhone] = useState('');
   const [placingOrder, setPlacingOrder] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
+  const [variantModalItem, setVariantModalItem] = useState<DBMenuItem | null>(null);
 
   // Force light mode for customer portal
   useEffect(() => {
@@ -259,6 +260,27 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
       }
       return prev.map(i => i.menuItem.id === itemId ? { ...i, quantity: newQty } : i);
     });
+  };
+
+  const handleAddToCartClick = (item: DBMenuItem) => {
+    if (item.variants && item.variants.filter((v: any) => v.isActive !== false).length > 0) {
+      setVariantModalItem(item);
+    } else {
+      addToCart(item);
+    }
+  };
+
+  const handleVariantSelect = (variant: { name: string; price: number }) => {
+    if (!variantModalItem) return;
+    const variantItem: DBMenuItem = {
+      ...variantModalItem,
+      id: `${variantModalItem.id}-${variant.name}`,
+      name: `${variantModalItem.name} (${variant.name})`,
+      price: Number(variant.price),
+      variants: [] // Clear sub-variants list
+    };
+    addToCart(variantItem);
+    setVariantModalItem(null);
   };
 
   const totalCartItems = cart.reduce((sum, i) => sum + i.quantity, 0);
@@ -604,7 +626,7 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
                   const cartQty = cart.find(i => i.menuItem.id === item.id)?.quantity || 0;
                   return (
                     <div key={item.id} className="bg-white border border-gray-100 rounded-2xl p-4 flex justify-between items-center shadow-sm hover:shadow-md hover:border-gray-200 transition-all duration-200 group">
-                      <div className="flex flex-col gap-1.5 min-w-0 pr-4">
+                    <div className="flex flex-col gap-1.5 min-w-0 pr-4">
                         <div className="flex items-center gap-2">
                           {item.dietary && (
                             <span className={`w-3.5 h-3.5 border flex items-center justify-center shrink-0 p-0.5 rounded ${
@@ -615,29 +637,49 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
                           )}
                           <span className="font-extrabold text-[13px] text-gray-855 truncate group-hover:text-orange-600 transition-colors duration-200 leading-snug">{item.name}</span>
                         </div>
-                        <span className="text-[13px] font-black text-gray-900">₹{item.price.toFixed(2)}</span>
+                        <div className="flex flex-col items-start gap-0.5">
+                          <span className="text-[13px] font-black text-gray-900">₹{item.price.toFixed(2)}</span>
+                          {item.variants && item.variants.filter((v: any) => v.isActive !== false).length > 0 && (
+                            <span className="text-[8px] text-gray-400 font-bold tracking-tight">Options available</span>
+                          )}
+                        </div>
                       </div>
 
                       <div className="shrink-0">
-                        {cartQty > 0 ? (
-                          <div className="flex items-center gap-3 bg-orange-50 border border-orange-100 rounded-2xl px-3 py-1.5 text-xs shadow-sm">
-                            <button type="button" onClick={() => updateQuantity(item.id, -1)} className="text-orange-600 hover:text-orange-700 active:scale-90 transition-transform cursor-pointer">
-                              <Minus size={13} strokeWidth={3.5} />
+                        {(() => {
+                          const hasActiveVariants = item.variants && item.variants.filter((v: any) => v.isActive !== false).length > 0;
+                          if (hasActiveVariants) {
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => handleAddToCartClick(item)}
+                                className="px-5 py-2 bg-orange-50 border border-orange-100/50 text-orange-600 hover:bg-orange-600 hover:text-white font-extrabold text-[11px] rounded-2xl active:scale-95 cursor-pointer shadow-sm hover:shadow transition-all duration-200"
+                              >
+                                ADD
+                              </button>
+                            );
+                          }
+
+                          return cartQty > 0 ? (
+                            <div className="flex items-center gap-3 bg-orange-50 border border-orange-100 rounded-2xl px-3 py-1.5 text-xs shadow-sm">
+                              <button type="button" onClick={() => updateQuantity(item.id, -1)} className="text-orange-600 hover:text-orange-700 active:scale-90 transition-transform cursor-pointer">
+                                <Minus size={13} strokeWidth={3.5} />
+                              </button>
+                              <span className="font-black text-orange-700 w-4 text-center">{cartQty}</span>
+                              <button type="button" onClick={() => addToCart(item)} className="text-orange-600 hover:text-orange-700 active:scale-90 transition-transform cursor-pointer">
+                                <Plus size={13} strokeWidth={3.5} />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => addToCart(item)}
+                              className="px-5 py-2 bg-orange-50 border border-orange-100/50 text-orange-600 hover:bg-orange-600 hover:text-white font-extrabold text-[11px] rounded-2xl active:scale-95 cursor-pointer shadow-sm hover:shadow transition-all duration-200"
+                            >
+                              ADD
                             </button>
-                            <span className="font-black text-orange-700 w-4 text-center">{cartQty}</span>
-                            <button type="button" onClick={() => addToCart(item)} className="text-orange-600 hover:text-orange-700 active:scale-90 transition-transform cursor-pointer">
-                              <Plus size={13} strokeWidth={3.5} />
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => addToCart(item)}
-                            className="px-5 py-2 bg-orange-50 border border-orange-100/50 text-orange-600 hover:bg-orange-600 hover:text-white font-extrabold text-[11px] rounded-2xl active:scale-95 cursor-pointer shadow-sm hover:shadow transition-all duration-200"
-                          >
-                            ADD
-                          </button>
-                        )}
+                          );
+                        })()}
                       </div>
                     </div>
                   );
@@ -680,31 +722,51 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
                               <span className={`w-1.5 h-1.5 rounded-full ${item.dietary === 'veg' ? 'bg-green-600' : 'bg-red-600'}`} />
                             </span>
                           )}
-                          <span className="font-extrabold text-[13px] text-gray-850 truncate">{item.name}</span>
+                          <span className="font-extrabold text-[13px] text-gray-855 truncate">{item.name}</span>
                         </div>
-                        <span className="text-[13px] font-black text-gray-900">₹{item.price.toFixed(2)}</span>
+                        <div className="flex flex-col items-start gap-0.5">
+                          <span className="text-[13px] font-black text-gray-900">₹{item.price.toFixed(2)}</span>
+                          {item.variants && item.variants.filter((v: any) => v.isActive !== false).length > 0 && (
+                            <span className="text-[8px] text-gray-400 font-bold tracking-tight">Options available</span>
+                          )}
+                        </div>
                       </div>
 
                       <div className="shrink-0">
-                        {cartQty > 0 ? (
-                          <div className="flex items-center gap-3 bg-orange-50 border border-orange-100 rounded-2xl px-3 py-1.5 text-xs shadow-sm">
-                            <button type="button" onClick={() => updateQuantity(item.id, -1)} className="text-orange-600 hover:text-orange-700 active:scale-90 transition-transform cursor-pointer">
-                              <Minus size={13} strokeWidth={3.5} />
+                        {(() => {
+                          const hasActiveVariants = item.variants && item.variants.filter((v: any) => v.isActive !== false).length > 0;
+                          if (hasActiveVariants) {
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => handleAddToCartClick(item)}
+                                className="px-5 py-2 bg-orange-50 border border-orange-100/50 text-orange-600 hover:bg-orange-600 hover:text-white font-extrabold text-[11px] rounded-2xl active:scale-95 cursor-pointer shadow-sm hover:shadow transition-all duration-200"
+                              >
+                                ADD
+                              </button>
+                            );
+                          }
+
+                          return cartQty > 0 ? (
+                            <div className="flex items-center gap-3 bg-orange-50 border border-orange-100 rounded-2xl px-3 py-1.5 text-xs shadow-sm">
+                              <button type="button" onClick={() => updateQuantity(item.id, -1)} className="text-orange-600 hover:text-orange-700 active:scale-90 transition-transform cursor-pointer">
+                                <Minus size={13} strokeWidth={3.5} />
+                              </button>
+                              <span className="font-black text-orange-700 w-4 text-center">{cartQty}</span>
+                              <button type="button" onClick={() => addToCart(item)} className="text-orange-600 hover:text-orange-700 active:scale-90 transition-transform cursor-pointer">
+                                <Plus size={13} strokeWidth={3.5} />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => addToCart(item)}
+                              className="px-5 py-2 bg-orange-50 border border-orange-100/50 text-orange-600 hover:bg-orange-600 hover:text-white font-extrabold text-[11px] rounded-2xl active:scale-95 cursor-pointer"
+                            >
+                              ADD
                             </button>
-                            <span className="font-black text-orange-700 w-4 text-center">{cartQty}</span>
-                            <button type="button" onClick={() => addToCart(item)} className="text-orange-600 hover:text-orange-700 active:scale-90 transition-transform cursor-pointer">
-                              <Plus size={13} strokeWidth={3.5} />
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => addToCart(item)}
-                            className="px-5 py-2 bg-orange-50 border border-orange-100/50 text-orange-600 hover:bg-orange-600 hover:text-white font-extrabold text-[11px] rounded-2xl active:scale-95 cursor-pointer"
-                          >
-                            ADD
-                          </button>
-                        )}
+                          );
+                        })()}
                       </div>
                     </div>
                   );
@@ -1203,6 +1265,41 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
           <span className="text-[8.5px] uppercase tracking-wider">Track</span>
         </button>
       </div>
+
+      {/* Variant Selection Modal */}
+      {variantModalItem && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 shadow-2xl w-full max-w-sm flex flex-col gap-4 animate-scale-up text-left">
+            <div className="flex justify-between items-center mb-1">
+              <h3 className="font-black text-lg text-gray-800 leading-snug">{variantModalItem.name}</h3>
+              <button 
+                type="button"
+                onClick={() => setVariantModalItem(null)} 
+                className="p-2 text-gray-400 hover:bg-gray-50 rounded-full transition-colors cursor-pointer"
+                title="Close"
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+            <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Select Variant:</div>
+            <div className="flex flex-col gap-2.5">
+              {variantModalItem.variants?.filter((v: any) => v.isActive !== false).map((v: any, idx: number) => {
+                return (
+                  <button 
+                    key={idx}
+                    type="button"
+                    onClick={() => handleVariantSelect(v)}
+                    className="w-full flex justify-between items-center p-4 rounded-2xl border border-gray-150 hover:border-orange-500 hover:bg-orange-50/40 transition-all cursor-pointer group active:scale-98"
+                  >
+                    <span className="font-extrabold text-xs text-gray-700 group-hover:text-orange-700">{v.name}</span>
+                    <span className="font-black text-xs text-orange-600">₹{Number(v.price).toFixed(2)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
