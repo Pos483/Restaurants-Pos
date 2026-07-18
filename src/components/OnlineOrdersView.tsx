@@ -53,8 +53,19 @@ export default function OnlineOrdersView() {
         const { ThermalPrinter } = await import('../printer');
         const kotNum = await getNextKotNumber();
         await ThermalPrinter.printKOT(Number(order.tableId), order.items, kotNum);
+
+        // Add to Live Kitchen Display (KDS)
+        const isCloudPrintSendingEnabled = localStorage.getItem('enableCloudPrintSending') !== 'false';
+        await db.kdsOrders.add({
+          id: Date.now().toString() + (isCloudPrintSendingEnabled ? '' : '-nocp'),
+          tableOrType: `Table ${order.tableId}`,
+          items: order.items,
+          timestamp: Date.now(),
+          status: 'pending',
+          kotNumber: kotNum
+        });
       } catch (printErr) {
-        console.error('KOT auto-print failed:', printErr);
+        console.error('KOT auto-print/KDS failed:', printErr);
       }
 
       notifyGlobalChange('active_orders');
@@ -95,13 +106,24 @@ export default function OnlineOrdersView() {
         // Print Kitchen KOT (Table 99 indicates Online order KOT)
         await ThermalPrinter.printKOT(99, order.items, kotNum);
 
+        // Add to Live Kitchen Display (KDS)
+        const isCloudPrintSendingEnabled = localStorage.getItem('enableCloudPrintSending') !== 'false';
+        await db.kdsOrders.add({
+          id: Date.now().toString() + (isCloudPrintSendingEnabled ? '' : '-nocp'),
+          tableOrType: order.order_type === 'delivery' ? 'Delivery' : 'Takeaway',
+          items: order.items,
+          timestamp: Date.now(),
+          status: 'pending',
+          kotNumber: kotNum
+        });
+
         // Print Delivery/Takeaway Slip
         const globalSettings = await db.restaurantSettings.get('global');
         const profile = await db.restaurantProfile.get('global');
         const printerSettings = { ...(profile || {}), ...(globalSettings || {}) };
         await ThermalPrinter.printDeliverySlip(order, printerSettings);
       } catch (printErr) {
-        console.error('KOT/Delivery printing failed:', printErr);
+        console.error('KOT/Delivery printing/KDS failed:', printErr);
       }
 
       notifyGlobalChange('online_orders');
