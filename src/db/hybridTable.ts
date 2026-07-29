@@ -37,17 +37,63 @@ export class HybridTable<T extends BaseDBRecord> {
       if (!supabase || !navigator.onLine) return [];
       const userId = getUserId();
       if (!userId) return [];
+
+      let allRows: Record<string, any>[] = [];
+      let from = 0;
+      const limit = 1000;
+
+      while (true) {
+        const { data, error } = await supabase
+          .from(this.tableName)
+          .select('*')
+          .eq('app_user_id', userId)
+          .range(from, from + limit - 1);
+
+        if (error) {
+          console.error(`[HybridTable.toArray] Error fetching ${this.tableName}:`, error);
+          break;
+        }
+
+        if (data && data.length > 0) {
+          allRows = allRows.concat(data);
+          if (data.length < limit) break;
+          from += limit;
+        } else {
+          break;
+        }
+      }
+
+      return allRows.map(r => this.fromRow(r));
+    }
+    return await this.dexieTable.toArray();
+  }
+
+  async queryDateRange(startMs: number, endMs: number): Promise<T[]> {
+    if (this.onlineOnly) {
+      if (!supabase || !navigator.onLine) return [];
+      const userId = getUserId();
+      if (!userId) return [];
+
       const { data, error } = await supabase
         .from(this.tableName)
         .select('*')
-        .eq('app_user_id', userId);
+        .eq('app_user_id', userId)
+        .gte('timestamp', startMs)
+        .lte('timestamp', endMs)
+        .order('timestamp', { ascending: false });
+
       if (error) {
-        console.error(`[HybridTable.toArray] Error fetching ${this.tableName}:`, error);
+        console.error(`[HybridTable.queryDateRange] Error:`, error);
         return [];
       }
+
       return (data || []).map(r => this.fromRow(r));
     }
-    return await this.dexieTable.toArray();
+
+    return await this.dexieTable
+      .where('timestamp')
+      .between(startMs, endMs, true, true)
+      .toArray();
   }
 
   async get(id: string | number): Promise<T | null> {

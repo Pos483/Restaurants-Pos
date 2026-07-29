@@ -11,8 +11,13 @@ const formatDateToInput = (date: Date) => date.toLocaleDateString('en-CA');
 const formatTimestampToTime = (timestamp: number) => new Date(timestamp).toLocaleTimeString('en-IN');
 
 export default function StockManagement() {
+  const [reportDate, setReportDate] = useState(formatDateToInput(new Date()));
   const stockItems = useLiveQuery(() => db.stockItems.toArray(), [], 'stock_items');
-  const stockTransactions = useLiveQuery(() => db.stockTransactions.toArray(), [], 'stock_transactions');
+  const stockTransactions = useLiveQuery(async () => {
+    const startMs = new Date(`${reportDate}T00:00:00`).getTime();
+    const endMs = new Date(`${reportDate}T23:59:59.999`).getTime();
+    return await db.stockTransactions.queryDateRange(startMs, endMs);
+  }, [reportDate], 'stock_transactions');
 
   useEffect(() => {
     triggerPull(true);
@@ -37,9 +42,6 @@ export default function StockManagement() {
   // Consumption (Stock Out)
   const [consumptionItemId, setConsumptionItemId] = useState<string | null>(null);
   const [consumptionQuantity, setConsumptionQuantity] = useState('');
-
-  // Report
-  const [reportDate, setReportDate] = useState(formatDateToInput(new Date()));
 
   useEffect(() => {
     if (!editingId) { setName(''); setQuantity(''); setUnit('kg'); setMinThreshold(''); }
