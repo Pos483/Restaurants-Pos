@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLiveQuery } from '../db';
-import { db, DBStockItem, DBStockTransaction } from '../db';
+import { db, DBStockItem, DBStockTransaction, triggerPull } from '../db';
 import { Plus, Trash2, Edit2, AlertTriangle, Package, CalendarDays, ShoppingCart, MinusCircle, X, Download, FileText } from 'lucide-react';
 import { useToast } from './Toast';
 import ConfirmModal from './ConfirmModal';
@@ -13,6 +13,10 @@ const formatTimestampToTime = (timestamp: number) => new Date(timestamp).toLocal
 export default function StockManagement() {
   const stockItems = useLiveQuery(() => db.stockItems.toArray(), [], 'stock_items');
   const stockTransactions = useLiveQuery(() => db.stockTransactions.toArray(), [], 'stock_transactions');
+
+  useEffect(() => {
+    triggerPull(true);
+  }, []);
 
   const [activeTab, setActiveTab] = useState('items');
   const [activeModal, setActiveModal] = useState<'addItem' | 'dailyUse' | 'purchase' | null>(null);
@@ -91,8 +95,8 @@ export default function StockManagement() {
 
   const executeDeleteItem = async (id: string) => {
     try {
-      // 1. Delete transactions first to satisfy foreign key constraint
-      await db.stockTransactions.where('stock_item_id').equals(id).delete();
+      // 1. Delete transactions first
+      await db.stockTransactions.where('stockItemId').equals(id).delete();
       // 2. Delete the stock item itself
       await db.stockItems.delete(id);
       showToast('Stock item and transactions deleted successfully!');
@@ -141,11 +145,18 @@ export default function StockManagement() {
 
   const filteredTransactions = useMemo(() => {
     if (!stockTransactions) return [];
-    const startOfDay = new Date(reportDate); startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(reportDate); endOfDay.setHours(23, 59, 59, 999);
+    // Force local time parsing for reportDate YYYY-MM-DD
+    const startOfDay = new Date(`${reportDate}T00:00:00`);
+    const endOfDay = new Date(`${reportDate}T23:59:59.999`);
+    const startMs = startOfDay.getTime();
+    const endMs = endOfDay.getTime();
+
     return stockTransactions
-      .filter(t => t.timestamp >= startOfDay.getTime() && t.timestamp <= endOfDay.getTime())
-      .sort((a, b) => b.timestamp - a.timestamp);
+      .filter(t => {
+        const txTime = Number(t.timestamp);
+        return !isNaN(txTime) && txTime >= startMs && txTime <= endMs;
+      })
+      .sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
   }, [stockTransactions, reportDate]);
 
   const groupedDailyReport = useMemo(() => {

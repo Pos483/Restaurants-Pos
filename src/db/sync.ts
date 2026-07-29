@@ -42,8 +42,12 @@ export const pullTable = async (tableName: string, userId: string) => {
     const largeTables = ['bills', 'stock_transactions', 'customer_transactions', 'expenses', 'kds_orders'];
     const isLargeTable = largeTables.includes(tableName);
 
+    const dexieTable = localDb.table(tableName);
+    const localCount = await dexieTable.count();
+
     const lastSyncKey = `last_sync_${tableName}_${userId}`;
-    const lastSync = isLargeTable ? localStorage.getItem(lastSyncKey) : null;
+    // If local table has 0 records, do a full pull from Supabase regardless of lastSync
+    let lastSync = (isLargeTable && localCount > 0) ? localStorage.getItem(lastSyncKey) : null;
     const currentSyncTime = new Date().toISOString();
 
     let allRows: Record<string, any>[] = [];
@@ -97,7 +101,6 @@ export const pullTable = async (tableName: string, userId: string) => {
     }
 
     const records = allRows.map(r => tableMapping.fromRow(r));
-    const dexieTable = localDb.table(tableName);
 
     await localDb.transaction('rw', [dexieTable], async () => {
       if (records.length > 0) {
@@ -156,9 +159,17 @@ export const pullFromSupabase = async () => {
 };
 
 let pullTimeout: ReturnType<typeof setTimeout> | null = null;
-export const triggerPull = () => {
+export const triggerPull = (forceFull: boolean = false) => {
+  if (forceFull) {
+    const userId = getUserId();
+    if (userId) {
+      Object.keys(localStorage)
+        .filter(k => k.startsWith('last_sync_'))
+        .forEach(k => localStorage.removeItem(k));
+    }
+  }
   if (pullTimeout) clearTimeout(pullTimeout);
-  pullTimeout = setTimeout(() => { pullFromSupabase(); }, 1000);
+  pullTimeout = setTimeout(() => { pullFromSupabase(); }, 300);
 };
 
 export const triggerSync = () => {

@@ -248,24 +248,7 @@ export function AppLayout({
             <>
               <NavItem icon={<LayoutDashboard size={16} />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
               <NavItem icon={<LayoutGrid size={16} />} label="Dine-In" active={activeTab === 'tables'} onClick={() => setActiveTab('tables')} />
-              <NavItem
-                icon={
-                  <div className="relative">
-                    <Globe size={16} />
-                    {(pendingOrders.length + pendingOnlineOrders.length) > 0 && (
-                      <span className="absolute -top-1 -right-1.5 flex h-3.5 w-3.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-450 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-orange-500 text-[8px] font-black text-white items-center justify-center">
-                          {pendingOrders.length + pendingOnlineOrders.length}
-                        </span>
-                      </span>
-                    )}
-                  </div>
-                }
-                label="Online"
-                active={activeTab === 'online_orders'}
-                onClick={() => setActiveTab('online_orders')}
-              />
+
               <NavItem icon={<Zap size={16} />} label="Quick" active={activeTab === 'quick'} onClick={() => setActiveTab('quick')} />
               <NavItem icon={<ChefHat size={16} />} label="Kitchen" active={activeTab === 'kot'} onClick={() => setActiveTab('kot')} />
               <NavItem icon={<BarChart3 size={16} />} label="Reports" active={activeTab === 'reports'} onClick={() => setActiveTab('reports')} />
@@ -411,22 +394,7 @@ export function AppLayout({
               )}
             </button>
 
-            {/* Online Orders Notification Bell */}
-            <button
-              onClick={() => setShowOnlineOrdersModal(true)}
-              className="relative p-2 rounded-xl bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 transition-all duration-300 text-gray-600 dark:text-slate-300 hover:text-orange-500 dark:hover:text-orange-400 border border-gray-200/50 dark:border-slate-700/50 shadow-sm cursor-pointer"
-              title="Online Orders (Home Delivery & Takeaway)"
-            >
-              <Globe size={16} className={pendingOnlineOrders.length > 0 ? 'animate-pulse text-orange-500 dark:text-orange-400' : ''} />
-              {pendingOnlineOrders.length > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 w-4">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-4 w-4 bg-orange-500 text-[9px] font-black text-white items-center justify-center">
-                    {pendingOnlineOrders.length}
-                  </span>
-                </span>
-              )}
-            </button>
+
 
             {/* Theme Toggle */}
             <button onClick={toggleTheme} className="p-2 rounded-xl bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 transition-all duration-300 text-gray-600 dark:text-slate-300 hover:text-orange-500 dark:hover:text-orange-400 border border-gray-200/50 dark:border-slate-700/50 shadow-sm" title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
@@ -515,22 +483,7 @@ export function AppLayout({
               <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-800 rounded-full mx-auto mb-4" />
               <h3 className="font-bold text-gray-800 dark:text-slate-100 px-2 mb-2">More Options</h3>
               <div className="grid grid-cols-4 gap-2">
-                <MobileMenuButton
-                  icon={
-                    <div className="relative">
-                      <Globe size={20} />
-                      {(pendingOrders.length + pendingOnlineOrders.length) > 0 && (
-                        <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75" />
-                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-500" />
-                        </span>
-                      )}
-                    </div>
-                  }
-                  label="Online"
-                  active={activeTab === 'online_orders'}
-                  onClick={() => { setActiveTab('online_orders'); setShowMobileMenu(false); }}
-                />
+
                 <MobileMenuButton icon={<BarChart3 size={20} />} label="Reports" active={activeTab === 'reports'} onClick={() => { setActiveTab('reports'); setShowMobileMenu(false); }} />
                 <MobileMenuButton icon={<Users size={20} />} label="Khata" active={activeTab === 'khata'} onClick={() => { setActiveTab('khata'); setShowMobileMenu(false); }} />
                 <MobileMenuButton icon={<UserIcon size={20} />} label="Customers" active={activeTab === 'customers'} onClick={() => { setActiveTab('customers'); setShowMobileMenu(false); }} />

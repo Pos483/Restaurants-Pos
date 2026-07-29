@@ -156,6 +156,23 @@ export default function App() {
   const qTableId = urlParams.get('t') || '';
 
   if (qRestaurantCode) {
+    if (!qTableId) {
+      return (
+        <div className="h-screen w-screen bg-[#0F172A] flex flex-col items-center justify-center p-6 text-center select-none">
+          <div className="max-w-sm flex flex-col items-center gap-6">
+            <div className="w-20 h-20 bg-orange-500/10 text-orange-500 rounded-3xl flex items-center justify-center border border-orange-500/20 shadow-lg">
+              <Unplug size={38} />
+            </div>
+            <div>
+              <h1 className="text-xl font-black text-white leading-tight">Online Ordering Disabled</h1>
+              <p className="text-xs text-slate-400 font-bold mt-3 leading-relaxed">
+                Public online ordering (Home Delivery & Takeaway) has been disabled.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
     return (
       <PublicOrdering 
         restaurantCode={qRestaurantCode} 
