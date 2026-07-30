@@ -21,14 +21,14 @@ if (sentryDsn) {
       Sentry.browserTracingIntegration(),
       Sentry.replayIntegration(),
     ],
-    tracesSampleRate: 1.0,
+    tracesSampleRate: import.meta.env.DEV ? 1.0 : 0.1,
     tracePropagationTargets: ["localhost", /^\//],
     replaysSessionSampleRate: 0.1,
     replaysOnErrorSampleRate: 1.0,
   });
 }
 
-if (typeof window !== 'undefined' && window.location.search.includes('clear=true')) {
+if (import.meta.env.DEV && typeof window !== 'undefined' && window.location.search.includes('clear=true')) {
   window.indexedDB.deleteDatabase('RestaurantPOS_v3');
   window.localStorage.clear();
   window.sessionStorage.clear();

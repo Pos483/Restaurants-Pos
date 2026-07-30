@@ -19,6 +19,7 @@ import ResetPasswordScreen from './components/ResetPasswordScreen';
 import BlockedScreen from './components/BlockedScreen';
 import PublicOrdering from './components/PublicOrdering';
 
+
 // ── Lazy imports (loaded on first tab visit) ─────────────────────────────────
 const QuickBilling       = lazy(() => import('./components/QuickBilling'));
 const Menu               = lazy(() => import('./components/Menu'));
@@ -30,7 +31,7 @@ const Customers          = lazy(() => import('./components/Customers'));
 const StockManagement    = lazy(() => import('./components/StockManagement'));
 const KOTManagement      = lazy(() => import('./components/KOTManagement'));
 const HelpSupport        = lazy(() => import('./components/HelpSupport'));
-const OnlineOrdersView   = lazy(() => import('./components/OnlineOrdersView'));
+
 const Subscription       = lazy(() => import('./components/Subscription'));
 
 export default function App() {
@@ -50,14 +51,19 @@ export default function App() {
   const { showToast } = useToast();
   const [selectedTableId, setSelectedTableId] = useState<number | null>(null);
 
-  // Listen to local cart decryption failure
+  // Listen to local cart decryption failure or encryption warning
   useEffect(() => {
     const handleCartDecryptionFailed = () => {
       showToast('⚠️ Local Cart security check fail ho gaya. Cart data decrypt nahi ho saka (Shayad local session key change hui hai).', 'error');
     };
+    const handleCartEncryptionWarning = () => {
+      showToast('⚠️ Cart storage encryption fail ho gaya. Compatibility mode me save ho raha hai.', 'error');
+    };
     window.addEventListener('cart-decryption-failed', handleCartDecryptionFailed);
+    window.addEventListener('cart-encryption-warning', handleCartEncryptionWarning);
     return () => {
       window.removeEventListener('cart-decryption-failed', handleCartDecryptionFailed);
+      window.removeEventListener('cart-encryption-warning', handleCartEncryptionWarning);
     };
   }, [showToast]);
 
@@ -87,8 +93,9 @@ export default function App() {
   const handleUpdateOrder = async (tableId: number, newOrders: OrderItem[]) => {
     try {
       await db.activeOrders.update(tableId, { orders: newOrders });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to update order:', err);
+      showToast(err?.message || '⚠️ Order update fail ho gaya. Kripya punah prayas karein.', 'error');
     }
   };
 
@@ -96,8 +103,9 @@ export default function App() {
     try {
       await db.activeOrders.update(tableId, { status: 'occupied' });
       setActiveTab('tables');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to place order:', err);
+      showToast(err?.message || '⚠️ Order place karne me samasya aayi.', 'error');
     }
   };
 
@@ -124,9 +132,11 @@ export default function App() {
       });
       if (!result) {
         console.error('Settle bill: update returned falsy — bill may not have been saved.');
+        showToast('⚠️ Bill settle nahi ho saka. Table status update nahi hua.', 'error');
       }
     } catch (err: any) {
       console.error('Failed to settle bill:', err);
+      showToast(err?.message || '⚠️ Bill settle karne me error aaya.', 'error');
       if (err?.message?.includes('RATE_LIMIT_EXCEEDED') && user?.id) {
         await handleRateLimitError();
         return;
@@ -150,10 +160,14 @@ export default function App() {
     );
   }
 
-  // Check if we are on a customer ordering route using query params (avoiding relative path asset issues)
-  const urlParams = new URLSearchParams(window.location.search);
-  const qRestaurantCode = urlParams.get('r') || '';
-  const qTableId = urlParams.get('t') || '';
+  // Check if we are on a customer ordering route using query params safely
+  const getQueryParam = (key: string): string => {
+    if (typeof window === 'undefined' || !window.location) return '';
+    return new URLSearchParams(window.location.search).get(key) || '';
+  };
+
+  const qRestaurantCode = getQueryParam('r');
+  const qTableId = getQueryParam('t');
 
   if (qRestaurantCode) {
     if (!qTableId) {
@@ -164,9 +178,9 @@ export default function App() {
               <Unplug size={38} />
             </div>
             <div>
-              <h1 className="text-xl font-black text-white leading-tight">Online Ordering Disabled</h1>
+              <h1 className="text-xl font-black text-white leading-tight">Online Delivery Disabled</h1>
               <p className="text-xs text-slate-400 font-bold mt-3 leading-relaxed">
-                Public online ordering (Home Delivery & Takeaway) has been disabled.
+                Public online delivery &amp; takeaway has been disabled. Please scan the QR code placed on your dining table to order.
               </p>
             </div>
           </div>
@@ -180,18 +194,6 @@ export default function App() {
         isOnline={isOnline}
       />
     );
-  }
-
-  // Handle old path redirection for backwards compatibility (will redirect to clean query params URL)
-  if (window.location.pathname.startsWith('/order/')) {
-    const parts = window.location.pathname.split('/').filter(Boolean); // ['order', 'restaurantCode', 'tableId']
-    const restaurantCode = parts[1] || '';
-    const tableId = parts[2] || '';
-    if (restaurantCode) {
-      const redirectUrl = tableId ? `/?r=${restaurantCode}&t=${tableId}` : `/?r=${restaurantCode}`;
-      window.location.replace(redirectUrl);
-      return null;
-    }
   }
 
   if (!isOnline) {
@@ -275,7 +277,7 @@ export default function App() {
         {activeTab === 'stock'        && <StockManagement />}
         {activeTab === 'kot'          && <KOTManagement />}
         {activeTab === 'help'         && <HelpSupport />}
-        {activeTab === 'online_orders' && <OnlineOrdersView />}
+
         {activeTab === 'subscription' && (
           <Subscription
             subscriptionState={premiumState}

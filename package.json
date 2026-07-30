@@ -15,7 +15,7 @@
     "electron:start": "electron .",
     "electron:dev": "concurrently -k \"cross-env BROWSER=none vite\" \"wait-on http://localhost:5173 && electron .\"",
     "electron:build": "npm run build && electron-builder",
-    "diagnostics": "node system_diagnostics_bot.js",
+    "diagnostics": "node scripts/system_diagnostics_bot.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",

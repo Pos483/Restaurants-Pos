@@ -1,21 +1,23 @@
 import { useState, useEffect } from 'react';
 import Dexie from 'dexie';
 import { OrderItem } from '../types';
+import { DBBill } from './types';
 
 // ── rescueBillItems ───────────────────────────────────────────────────────────
 
-export const rescueBillItems = (bill: any): OrderItem[] => {
+export const rescueBillItems = (bill: DBBill | Record<string, any> | any): OrderItem[] => {
   let itemsToProcess: OrderItem[] = [];
-  if (Array.isArray(bill.items) && bill.items.length > 0) {
-    itemsToProcess = bill.items;
-  } else if (bill.data?.items && Array.isArray(bill.data.items)) {
-    itemsToProcess = bill.data.items;
+  const billObj = bill as { items?: OrderItem[]; data?: { items?: OrderItem[] } };
+  if (Array.isArray(billObj.items) && billObj.items.length > 0) {
+    itemsToProcess = billObj.items;
+  } else if (billObj.data?.items && Array.isArray(billObj.data.items)) {
+    itemsToProcess = billObj.data.items;
   }
   const uniqueItemsMap = new Map<string, OrderItem>();
   for (const item of itemsToProcess) {
-    const anyItem = item as any;
-    const baseId = anyItem?.menuItem?.id || anyItem?.id || Math.random().toString();
-    const namePart = anyItem?.menuItem?.name || anyItem?.name || '';
+    const rawItem = item as unknown as Record<string, unknown> & { id?: string; name?: string; menuItem?: { id?: string; name?: string } };
+    const baseId = rawItem?.menuItem?.id || rawItem?.id || Math.random().toString();
+    const namePart = rawItem?.menuItem?.name || rawItem?.name || '';
     let itemKey = `${baseId}_${namePart}`;
     if (!uniqueItemsMap.has(itemKey)) {
       uniqueItemsMap.set(itemKey, JSON.parse(JSON.stringify(item)));
@@ -45,25 +47,26 @@ export const getUserId = () => localStorage.getItem('activeUserId') || '';
 
 // Bounded FIFO cache to track IDs of records mutated on this client (works in both offline and online-only modes)
 export class LocalIdCache {
-  private ids: string[] = [];
+  private ids: Set<string> = new Set();
   private max = 200;
 
   add(id: string | number) {
     const idStr = String(id);
-    if (!this.ids.includes(idStr)) {
-      this.ids.push(idStr);
-      if (this.ids.length > this.max) {
-        this.ids.shift();
+    if (!this.ids.has(idStr)) {
+      this.ids.add(idStr);
+      if (this.ids.size > this.max) {
+        const firstKey = this.ids.values().next().value;
+        if (firstKey) this.ids.delete(firstKey);
       }
     }
   }
 
   has(id: string | number): boolean {
-    return this.ids.includes(String(id));
+    return this.ids.has(String(id));
   }
 
   get size(): number {
-    return this.ids.length;
+    return this.ids.size;
   }
 }
 
@@ -107,25 +110,24 @@ localDb.version(6).stores({
   self_orders: 'id, tableId, status'
 });
 
-localDb.version(7).stores({
-  online_orders: 'id, status, customerPhone'
-});
+
 
 import { useLiveQuery as dexieUseLiveQuery } from 'dexie-react-hooks';
 
 export function useLiveQuery<T>(
   querier: () => T | Promise<T>,
-  deps: any[] = [],
+  deps: unknown[] = [],
   tableNames?: string | string[]
 ): T | undefined {
   const [tick, setTick] = useState(0);
+  const tableKey = Array.isArray(tableNames) ? tableNames.join(',') : (tableNames || '');
 
   useEffect(() => {
-    if (!tableNames) return;
+    if (!tableKey) return;
     const onChanged = () => setTick(v => v + 1);
 
-    // Determine target tables
-    const targetTables: string[] = Array.isArray(tableNames) ? tableNames : [tableNames];
+    // Determine target tables from stable key
+    const targetTables: string[] = tableKey.split(',').filter(Boolean);
 
     targetTables.forEach(table => {
       let listeners = tableListeners.get(table);
@@ -144,7 +146,7 @@ export function useLiveQuery<T>(
         }
       });
     };
-  }, [tableNames]);
+  }, [tableKey]);
 
   return dexieUseLiveQuery(querier, [...deps, tick]);
 }

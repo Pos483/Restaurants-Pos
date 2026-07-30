@@ -2,37 +2,10 @@ import { OrderItem } from './types';
 import { db } from './db';
 import { logger } from './utils/logger';
 import { getBillTranslations } from './i18n';
-
-// ESC/POS Commands
-const ESC = '\x1B';
-const GS = '\x1D';
-const INIT = ESC + '@'; // Initialize printer
-const BOLD_ON = ESC + 'E' + '\x01';
-const BOLD_OFF = ESC + 'E' + '\x00';
-const CENTER = ESC + 'a' + '\x01';
-const LEFT = ESC + 'a' + '\x00';
-const RIGHT = ESC + 'a' + '\x02';
-const CUT = GS + 'V' + '\x41' + '\x10'; // Partial cut
-const DOUBLE_HEIGHT_ON = ESC + '!' + '\x10';
-const DOUBLE_HW_ON = ESC + '!' + '\x30'; // Double Height + Double Width
-const DOUBLE_HEIGHT_OFF = ESC + '!' + '\x00';
-
-// ── Serial write with timeout to prevent port hangs ───────────────────────────
-const writeWithTimeout = (
-  writer: WritableStreamDefaultWriter<Uint8Array>,
-  data: Uint8Array,
-  timeoutMs = 5000
-): Promise<void> => {
-  return Promise.race([
-    writer.write(data),
-    new Promise<void>((_, reject) =>
-      setTimeout(
-        () => reject(new Error('[Printer] Write timeout — port may be disconnected or out of paper')),
-        timeoutMs
-      )
-    )
-  ]);
-};
+import {
+  INIT, BOLD_ON, BOLD_OFF, CENTER, LEFT, RIGHT, CUT,
+  DOUBLE_HEIGHT_ON, DOUBLE_HW_ON, DOUBLE_HEIGHT_OFF, writeWithTimeout
+} from './printer/escpos';
 
 export class ThermalPrinter {
   private static port: any = null;

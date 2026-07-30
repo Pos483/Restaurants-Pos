@@ -66,8 +66,7 @@ export {
   revertStockForBill,
   revertCustomerCreditForBill,
   cancelBill,
-  clearAllLocalTables,
-  finalizeOnlineOrderAsBill
+  clearAllLocalTables
 } from './db/operations';
 
 // Helper re-export
@@ -75,6 +74,5 @@ export { getLocalDateString } from './types';
 
 // ── Database Backup & Restore Operations ──────────────────────────────────────
 export {
-  exportDbToJson,
-  importDbFromJson
+  exportDbToJson
 } from './db/backup';

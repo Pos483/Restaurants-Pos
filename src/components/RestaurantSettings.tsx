@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useLiveQuery, db, exportDbToJson, importDbFromJson } from '../db';
+import { useLiveQuery, db, exportDbToJson } from '../db';
 import { QRCodeSVG } from 'qrcode.react';
 import { 
   Settings, 
@@ -20,8 +20,7 @@ import {
   Heart,
   QrCode,
   Cloud,
-  Database,
-  Upload
+  Database
 } from 'lucide-react';
 import { ThermalPrinter } from '../printer';
 import { useToast } from './Toast';
@@ -341,7 +340,11 @@ export default function RestaurantSettings() {
     setFormData({ ...formData, [name]: !formData[name] });
   };
 
+  const [savingSettings, setSavingSettings] = useState(false);
+
   const handleSave = async () => {
+    if (savingSettings) return;
+    setSavingSettings(true);
     try {
       const existingSettings = (await db.restaurantSettings.get('global') || {}) as any;
 
@@ -373,6 +376,8 @@ export default function RestaurantSettings() {
     } catch (err: any) {
       console.error('Error saving settings:', err);
       showToast(`Error saving settings: ${err.message || err}`, 'error');
+    } finally {
+      setSavingSettings(false);
     }
   };
 
@@ -658,31 +663,6 @@ export default function RestaurantSettings() {
                     Export
                   </button>
 
-                  {/* Import Button (File Upload Wrapper) */}
-                  <label className="px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-[10px] transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 shadow-sm uppercase tracking-wider select-none">
-                    <Upload size={12} />
-                    Import
-                    <input 
-                      type="file" 
-                      accept=".json" 
-                      className="hidden" 
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-
-                        if (confirm('Are you sure you want to restore database from backup? This will merge records based on their IDs.')) {
-                          const res = await importDbFromJson(file);
-                          if (res.success) {
-                            showToast(res.message, 'success');
-                          } else {
-                            showToast(res.message, 'error');
-                          }
-                        }
-                        // Reset input value so same file can be uploaded again
-                        e.target.value = '';
-                      }}
-                    />
-                  </label>
                 </div>
               </div>
 

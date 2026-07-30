@@ -6,24 +6,31 @@ import { normalizePhone, mergeDuplicateCustomers } from './customers';
 
 // ── Bill Number Helper ─────────────────────────────────────────────────────────
 
-export const getNextBillNumber = async (): Promise<number> => {
+export const getNextBillNumber = async (retries = 3): Promise<number> => {
   const userId = getUserId();
 
-  // ── Server-side path (authoritative) ──────────────────────────────────────
-  // Call the Supabase RPC which atomically increments bill_sequence in Postgres.
+  // ── Server-side path (authoritative with exponential backoff retry) ──────
   if (supabase && navigator.onLine && userId) {
-    const { data, error } = await supabase.rpc('get_next_bill_number', { p_user_id: userId });
-    if (error) {
-      console.error('[BillSeq] Server RPC failed:', error);
-      throw error;
+    let lastError: any = null;
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const { data, error } = await supabase.rpc('get_next_bill_number', { p_user_id: userId });
+        if (!error && data && Number(data) > 0) {
+          const serverBillNum = Number(data);
+          // Keep local Dexie counter in sync
+          await localDb.table('restaurant_settings').update('global', { billSequence: serverBillNum + 1 });
+          return serverBillNum;
+        }
+        if (error) lastError = error;
+      } catch (err) {
+        lastError = err;
+      }
+      if (attempt < retries) {
+        await new Promise(res => setTimeout(res, attempt * 300));
+      }
     }
-    const serverBillNum = Number(data);
-    if (!serverBillNum || serverBillNum <= 0) {
-      throw new Error('Invalid server bill number');
-    }
-    // Keep local Dexie counter in sync
-    await localDb.table('restaurant_settings').update('global', { billSequence: serverBillNum + 1 });
-    return serverBillNum;
+    console.error('[BillSeq] Server RPC failed after retries:', lastError);
+    throw new Error(`Server unavailable for bill sequence generation: ${lastError?.message || lastError || 'Unknown error'}`);
   }
 
   throw new Error("Internet is disconnected or the server is unavailable. Cannot generate bill.");
@@ -31,9 +38,31 @@ export const getNextBillNumber = async (): Promise<number> => {
 
 // ── KOT Number Helper ─────────────────────────────────────────────────────────
 
-export const getNextKotNumber = async () => {
+export const getNextKotNumber = async (): Promise<string> => {
   const today = getLocalDateString();
+  const userId = getUserId();
 
+  // 1. Try Server-side RPC for multi-device atomic sequence
+  if (supabase && navigator.onLine && userId) {
+    try {
+      const { data, error } = await supabase.rpc('get_next_kot_number', { p_user_id: userId, p_date: today });
+      if (!error && data && Number(data) > 0) {
+        const serverKotSeq = Number(data);
+        const settings = await db.restaurantSettings.get('global');
+        if (settings) {
+          await db.restaurantSettings.update('global', {
+            kotSequence: serverKotSeq + 1,
+            lastKotDate: today
+          });
+        }
+        return serverKotSeq.toString().padStart(4, '0');
+      }
+    } catch (_) {
+      // Fall back to local sequence if RPC fails or is unavailable
+    }
+  }
+
+  // 2. Local Dexie Fallback (Single Device or Offline)
   const settings = await db.restaurantSettings.get('global');
   let kotSeq = settings?.kotSequence || 1;
   let lastDate = settings?.lastKotDate || today;
@@ -164,11 +193,20 @@ export const revertCustomerCreditForBill = async (
   }
 };
 
+export const sanitizeInputText = (text: string | undefined | null): string => {
+  if (!text) return '';
+  return String(text)
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<[^>]*>?/gm, '')
+    .trim();
+};
+
 // ── Cancel Bill Helper ───────────────────────────────────────────────────────
 
 export const cancelBill = async (billId: string, reason: string) => {
   try {
-    if (!reason || reason.trim() === '') {
+    const cleanReason = sanitizeInputText(reason);
+    if (!cleanReason) {
       throw new Error('Cancellation reason is required for authorization');
     }
     const bill = await db.bills.get(billId);
@@ -178,7 +216,7 @@ export const cancelBill = async (billId: string, reason: string) => {
     const updatedData = {
       ...(bill.data || {}),
       status: 'cancelled',
-      cancelReason: reason,
+      cancelReason: cleanReason,
       cancelledAt: Date.now()
     };
     await db.bills.update(billId, { data: updatedData });
@@ -250,45 +288,4 @@ export const clearAllLocalTables = async () => {
   console.log('[DB] All local database tables cleared and sync timers reset');
 };
 
-export const finalizeOnlineOrderAsBill = async (order: any): Promise<void> => {
-  const existingBill = await db.bills.get(order.id);
-  if (existingBill) {
-    return; // Avoid duplicates
-  }
-
-  const subtotal = order.items.reduce((sum: number, item: any) => {
-    const price = item.menuItem?.price || item.price || 0;
-    return sum + (price * item.quantity);
-  }, 0);
-  
-  const billNumber = await getNextBillNumber();
-  const billTimestamp = Date.now();
-  const billId = order.id;
-  
-  await db.bills.add({
-    id: billId,
-    tableId: 'Online',
-    items: order.items,
-    subtotal: subtotal,
-    tax: 0,
-    total: subtotal,
-    paymentMethod: 'UPI',
-    timestamp: billTimestamp,
-    billNumber: billNumber,
-    discount: 0,
-    customerName: order.customerName,
-    customerPhone: order.customerPhone,
-    data: { 
-      orderType: order.orderType,
-      deliveryAddress: order.deliveryAddress,
-      pickupTime: order.pickupTime
-    }
-  });
-
-  try {
-    await deductStockForBill(billId, order.items, billNumber);
-  } catch (err) {
-    console.error('Failed to deduct stock for online order:', err);
-  }
-};
 
