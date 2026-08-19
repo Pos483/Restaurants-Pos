@@ -4,10 +4,15 @@ import { UserPlus, IndianRupee, Printer, Clock, ArrowUpRight, ArrowDownLeft, Use
 import { useToast } from './Toast';
 import { ThermalPrinter } from '../printer';
 
-export default function KhataBook() {
+interface KhataBookProps {
+  initialCustomerId?: string | null;
+  initialCustomerPhone?: string | null;
+}
+
+export default function KhataBook({ initialCustomerId, initialCustomerPhone }: KhataBookProps = {}) {
   const { showToast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(initialCustomerId || null);
 
   // Modals state
   const [showAddModal, setShowAddModal] = useState(false);
@@ -87,6 +92,17 @@ export default function KhataBook() {
 
   // Live queries
   const customers = useLiveQuery(() => db.customers.toArray(), [], 'customers') || [];
+
+  // Sync selected customer from props if provided
+  useEffect(() => {
+    if (initialCustomerId) {
+      setSelectedCustomerId(initialCustomerId);
+    } else if (initialCustomerPhone && customers.length > 0) {
+      const cleanTarget = normalizePhone(initialCustomerPhone);
+      const match = customers.find(c => normalizePhone(c.phone) === cleanTarget);
+      if (match) setSelectedCustomerId(match.id);
+    }
+  }, [initialCustomerId, initialCustomerPhone, customers]);
 
   const customerTransactions = useLiveQuery(async () => {
     if (!selectedCustomerId) return [];

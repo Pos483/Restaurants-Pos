@@ -25,7 +25,6 @@ const QuickBilling       = lazy(() => import('./components/QuickBilling'));
 const Menu               = lazy(() => import('./components/Menu'));
 const RestaurantSettings = lazy(() => import('./components/RestaurantSettings'));
 const Reports            = lazy(() => import('./components/Reports'));
-const KhataBook          = lazy(() => import('./components/KhataBook'));
 const Customers          = lazy(() => import('./components/Customers'));
 const StaffManagement    = lazy(() => import('./components/StaffManagement'));
 const StockManagement    = lazy(() => import('./components/StockManagement'));
@@ -271,8 +270,9 @@ export default function App() {
         {activeTab === 'menu'         && <Menu />}
         {(activeTab === 'settings' || activeTab === 'profile') && <RestaurantSettings />}
         {activeTab === 'reports'      && <Reports />}
-        {activeTab === 'khata'        && <KhataBook />}
-        {activeTab === 'customers'    && <Customers />}
+        {(activeTab === 'customers' || activeTab === 'khata') && (
+          <Customers initialSubTab={activeTab === 'khata' ? 'khata' : 'crm'} />
+        )}
         {activeTab === 'staff'        && <StaffManagement />}
         {activeTab === 'stock'        && <StockManagement />}
         {activeTab === 'kot'          && <KOTManagement />}

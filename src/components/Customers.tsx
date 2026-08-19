@@ -2,11 +2,12 @@ import { useState, useMemo } from 'react';
 import {
   Users, Phone, Star, Trash2, Edit3, X,
   MessageSquare, Send, TrendingUp, IndianRupee,
-  UserPlus, Printer, History, Cake
+  UserPlus, Printer, History, Cake, BookOpen
 } from 'lucide-react';
 import { useLiveQuery, db } from '../db';
 import { DBPosCustomer, normalizePhone } from '../db';
 import { useToast } from './Toast';
+import KhataBook from './KhataBook';
 
 const PRESET_TAGS = ['Regular', 'VIP', 'Wholesale', 'Festival', 'Birthday', 'New'];
 
@@ -33,12 +34,44 @@ const BROADCAST_TEMPLATES = [
   }
 ];
 
-export default function Customers() {
+interface CustomersProps {
+  initialSubTab?: 'crm' | 'khata';
+}
+
+export default function Customers({ initialSubTab = 'crm' }: CustomersProps = {}) {
   const { showToast } = useToast();
+  const [activeSubTab, setActiveSubTab] = useState<'crm' | 'khata'>(initialSubTab);
+  const [targetKhataPhone, setTargetKhataPhone] = useState<string | null>(null);
+  const [targetKhataId, setTargetKhataId] = useState<string | null>(null);
 
   // Queries
   const customersList = useLiveQuery(() => db.posCustomers.toArray(), [], 'posCustomers') || [];
   const billsList = useLiveQuery(() => db.bills.toArray(), [], 'bills') || [];
+  const khataCustomersList = useLiveQuery(() => db.customers.toArray(), [], 'customers') || [];
+
+  // Live Khata stats & mapping
+  const totalKhataOutstanding = useMemo(() => {
+    return khataCustomersList.reduce((acc, c) => acc + (c.balance || 0), 0);
+  }, [khataCustomersList]);
+
+  const totalDebtors = useMemo(() => {
+    return khataCustomersList.filter(c => (c.balance || 0) > 0).length;
+  }, [khataCustomersList]);
+
+  const khataMap = useMemo(() => {
+    const map = new Map<string, { id: string; balance: number; creditLimit: number; name: string }>();
+    khataCustomersList.forEach(k => {
+      const clean = normalizePhone(k.phone);
+      if (clean) map.set(clean, { id: k.id, balance: k.balance || 0, creditLimit: k.creditLimit || 10000, name: k.name });
+    });
+    return map;
+  }, [khataCustomersList]);
+
+  const openCustomerKhata = (phone: string, id?: string) => {
+    setTargetKhataPhone(phone);
+    if (id) setTargetKhataId(id);
+    setActiveSubTab('khata');
+  };
 
   // Filter & Search states
   const [search, setSearch] = useState('');
@@ -308,8 +341,8 @@ export default function Customers() {
     <div className="h-full flex flex-col bg-slate-50/60 dark:bg-[#090D16] text-slate-900 dark:text-slate-100 overflow-hidden font-sans select-none transition-colors">
       
       {/* ── TOP HEADER ───────────────────────────────────────────────────────── */}
-      <div className="relative overflow-hidden bg-white dark:bg-slate-900/90 border-b border-slate-200/80 dark:border-slate-800/80 px-6 py-4.5 shrink-0 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="relative overflow-hidden bg-white dark:bg-slate-900/90 border-b border-slate-200/80 dark:border-slate-800/80 px-6 py-4 shrink-0 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           
           <div className="flex items-center gap-3.5">
             <div className="w-11 h-11 bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-600 text-white rounded-2xl shadow-lg shadow-indigo-500/25 flex items-center justify-center shrink-0">
@@ -318,310 +351,377 @@ export default function Customers() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-slate-50">
-                  Customer Database &amp; CRM
+                  Customers &amp; Khata Hub
                 </h1>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/50">
-                  {metrics.totalCount} Registered
+                  {metrics.totalCount} CRM • {totalDebtors} Khata Accounts
                 </span>
               </div>
               <p className="text-xs text-slate-400 dark:text-slate-500 font-semibold mt-0.5">
-                Track customer visits, order history, VIP rewards, and WhatsApp promotions
+                Manage customer profiles, loyalty CRM, and Khata (udhar / ledger) in one place
               </p>
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2.5">
-            <button
-              onClick={printCustomerDirectory}
-              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
-              title="Print Customer Directory"
-            >
-              <Printer size={15} />
-              Print
-            </button>
-
-            <button
-              onClick={() => setShowBroadcast(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
-            >
-              <MessageSquare size={15} />
-              WhatsApp Broadcast
-            </button>
-
-            <button
-              onClick={openAddCustomer}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
-            >
-              <UserPlus size={15} />
-              + Add Customer
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ── 4 KPI CARDS ──────────────────────────────────────────────────────── */}
-      <div className="px-6 pt-4 shrink-0">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-          
-          <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-              <Users size={20} />
-            </div>
-            <div>
-              <p className="text-[11px] font-bold text-slate-400">Total Customers</p>
-              <p className="text-base font-black text-slate-900 dark:text-slate-100">{metrics.totalCount}</p>
-            </div>
-          </div>
-
-          <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-              <IndianRupee size={20} />
-            </div>
-            <div>
-              <p className="text-[11px] font-bold text-slate-400">Total Revenue</p>
-              <p className="text-base font-black text-slate-900 dark:text-slate-100">{formatCurrency(metrics.totalSpent)}</p>
-            </div>
-          </div>
-
-          <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-              <TrendingUp size={20} />
-            </div>
-            <div>
-              <p className="text-[11px] font-bold text-slate-400">Average Spend</p>
-              <p className="text-base font-black text-slate-900 dark:text-slate-100">{formatCurrency(metrics.avgSpend)}</p>
-            </div>
-          </div>
-
-          <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
-              <Star size={20} />
-            </div>
-            <div>
-              <p className="text-[11px] font-bold text-slate-400">Repeat Customers</p>
-              <p className="text-base font-black text-slate-900 dark:text-slate-100">
-                {metrics.repeatCount} <span className="text-xs font-bold text-purple-600">({metrics.repeatPercent}%)</span>
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── FILTER & SEARCH TOOLBAR (NO ICONS IN INPUTS) ────────────────────── */}
-      <div className="px-6 pt-4 shrink-0">
-        <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3">
-          
-          {/* Clean Search Input without internal icons */}
-          <div className="relative w-full md:w-80">
-            <input
-              type="text"
-              placeholder="Search customer name, mobile, email..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full px-4 py-2.5 bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/60 rounded-xl text-xs font-bold outline-none focus:border-indigo-500 text-slate-900 dark:text-slate-100"
-            />
-            {search && (
+          {/* Sub-Tabs Switcher & Actions */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Sub-Tabs Pill */}
+            <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-inner">
               <button
-                onClick={() => setSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                type="button"
+                onClick={() => setActiveSubTab('crm')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                  activeSubTab === 'crm'
+                    ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200/60 dark:border-slate-700/60'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                }`}
               >
-                <X size={14} />
+                <Users size={14} />
+                <span>Customer CRM</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
+                  {customersList.length}
+                </span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveSubTab('khata')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                  activeSubTab === 'khata'
+                    ? 'bg-white dark:bg-slate-900 text-orange-600 dark:text-orange-400 shadow-sm border border-slate-200/60 dark:border-slate-700/60'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                }`}
+              >
+                <BookOpen size={14} />
+                <span>Khata Book (खाता)</span>
+                {totalKhataOutstanding > 0 ? (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
+                    ₹{totalKhataOutstanding.toFixed(0)}
+                  </span>
+                ) : (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
+                    Clear
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* CRM Specific Actions */}
+            {activeSubTab === 'crm' && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={printCustomerDirectory}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
+                  title="Print Customer Directory"
+                >
+                  <Printer size={14} />
+                  <span className="hidden sm:inline">Print</span>
+                </button>
+
+                <button
+                  onClick={() => setShowBroadcast(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+                >
+                  <MessageSquare size={14} />
+                  <span className="hidden sm:inline">Broadcast</span>
+                </button>
+
+                <button
+                  onClick={openAddCustomer}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
+                >
+                  <UserPlus size={14} />
+                  + Add
+                </button>
+              </div>
             )}
           </div>
+        </div>
+      </div>
 
-          {/* Tag Filter Pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide w-full md:w-auto">
-            <button
-              onClick={() => setSelectedTag('')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                selectedTag === ''
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
-              }`}
-            >
-              All ({customersList.length})
-            </button>
-            {PRESET_TAGS.map(tag => {
-              const count = customersList.filter(c => (c.tags || []).includes(tag)).length;
-              return (
+      {/* ── SUB-TAB CONTENT ─────────────────────────────────────────────────── */}
+      {activeSubTab === 'khata' ? (
+        <div className="flex-1 p-6 overflow-hidden">
+          <KhataBook initialCustomerId={targetKhataId} initialCustomerPhone={targetKhataPhone} />
+        </div>
+      ) : (
+        <>
+          {/* ── 4 KPI CARDS ──────────────────────────────────────────────────── */}
+          <div className="px-6 pt-4 shrink-0">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+              
+              <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                  <Users size={20} />
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-slate-400">Total Customers</p>
+                  <p className="text-base font-black text-slate-900 dark:text-slate-100">{metrics.totalCount}</p>
+                </div>
+              </div>
+
+              <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <IndianRupee size={20} />
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-slate-400">Total Revenue</p>
+                  <p className="text-base font-black text-slate-900 dark:text-slate-100">{formatCurrency(metrics.totalSpent)}</p>
+                </div>
+              </div>
+
+              <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <TrendingUp size={20} />
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-slate-400">Average Spend</p>
+                  <p className="text-base font-black text-slate-900 dark:text-slate-100">{formatCurrency(metrics.avgSpend)}</p>
+                </div>
+              </div>
+
+              <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                  <Star size={20} />
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-slate-400">Repeat Customers</p>
+                  <p className="text-base font-black text-slate-900 dark:text-slate-100">
+                    {metrics.repeatCount} <span className="text-xs font-bold text-purple-600">({metrics.repeatPercent}%)</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── FILTER & SEARCH TOOLBAR ─────────────────────────────────────── */}
+          <div className="px-6 pt-4 shrink-0">
+            <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3">
+              
+              {/* Clean Search Input */}
+              <div className="relative w-full md:w-80">
+                <input
+                  type="text"
+                  placeholder="Search customer name, mobile, email..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/60 rounded-xl text-xs font-bold outline-none focus:border-indigo-500 text-slate-900 dark:text-slate-100"
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              {/* Tag Filter Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide w-full md:w-auto">
                 <button
-                  key={tag}
-                  onClick={() => setSelectedTag(tag === selectedTag ? '' : tag)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                    selectedTag === tag
+                  onClick={() => setSelectedTag('')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    selectedTag === ''
                       ? 'bg-indigo-600 text-white shadow-xs'
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
                   }`}
                 >
-                  {tag} ({count})
+                  All ({customersList.length})
                 </button>
-              );
-            })}
-          </div>
+                {PRESET_TAGS.map(tag => {
+                  const count = customersList.filter(c => (c.tags || []).includes(tag)).length;
+                  return (
+                    <button
+                      key={tag}
+                      onClick={() => setSelectedTag(tag === selectedTag ? '' : tag)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        selectedTag === tag
+                          ? 'bg-indigo-600 text-white shadow-xs'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
+                      }`}
+                    >
+                      {tag} ({count})
+                    </button>
+                  );
+                })}
+              </div>
 
-          {/* Sort Dropdown */}
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs font-bold text-slate-400">Sort:</span>
-            <select
-              value={sortBy}
-              onChange={e => setSortBy(e.target.value as any)}
-              className="px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 outline-none cursor-pointer"
-            >
-              <option value="lastVisit">Last Visit</option>
-              <option value="totalSpent">Highest Spend (₹)</option>
-              <option value="visitCount">Most Visits</option>
-              <option value="name">Name (A to Z)</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* ── CUSTOMER CARDS GRID ──────────────────────────────────────────────── */}
-      <div className="flex-1 p-6 overflow-y-auto">
-        {filteredCustomers.length === 0 ? (
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-16 text-center flex flex-col items-center justify-center shadow-xs">
-            <div className="w-16 h-16 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-4">
-              <Users size={32} />
-            </div>
-            <h3 className="text-base font-black text-slate-800 dark:text-slate-200">
-              {search || selectedTag ? 'No matching customers found' : 'No customers registered yet'}
-            </h3>
-            <p className="text-xs text-slate-400 mt-1 mb-5 max-w-sm">
-              {search || selectedTag ? 'Try searching with another name or phone number.' : 'Add your first customer to track billing, visits and order history.'}
-            </p>
-            <button
-              onClick={openAddCustomer}
-              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-500/20 cursor-pointer"
-            >
-              + Add New Customer
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filteredCustomers.map(c => {
-              const cleanPhone = c.phone.replace(/\D/g, '');
-
-              return (
-                <div
-                  key={c.id}
-                  className="bg-white dark:bg-slate-900/90 rounded-3xl border border-slate-200/80 dark:border-slate-800/80 p-5 shadow-xs flex flex-col justify-between gap-4 transition-all hover:shadow-md hover:border-indigo-500/40 group"
+              {/* Sort Dropdown */}
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs font-bold text-slate-400">Sort:</span>
+                <select
+                  value={sortBy}
+                  onChange={e => setSortBy(e.target.value as any)}
+                  className="px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 outline-none cursor-pointer"
                 >
-                  {/* Top Row: Avatar + Name + Tags + Actions */}
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3.5">
-                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500 via-indigo-600 to-purple-600 text-white font-black text-base flex items-center justify-center shadow-md shadow-indigo-500/20 shrink-0">
-                        {c.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <h3 className="font-black text-sm text-slate-900 dark:text-slate-100 tracking-tight leading-snug">
-                          {c.name}
-                        </h3>
-                        <div className="flex items-center gap-1.5 text-xs text-slate-400 font-bold mt-0.5">
-                          <Phone size={12} className="text-indigo-500" />
-                          <span>{c.phone}</span>
+                  <option value="lastVisit">Last Visit</option>
+                  <option value="totalSpent">Highest Spend (₹)</option>
+                  <option value="visitCount">Most Visits</option>
+                  <option value="name">Name (A to Z)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* ── CUSTOMER CARDS GRID ─────────────────────────────────────────── */}
+          <div className="flex-1 p-6 overflow-y-auto">
+            {filteredCustomers.length === 0 ? (
+              <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-16 text-center flex flex-col items-center justify-center shadow-xs">
+                <div className="w-16 h-16 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-4">
+                  <Users size={32} />
+                </div>
+                <h3 className="text-base font-black text-slate-800 dark:text-slate-200">
+                  {search || selectedTag ? 'No matching customers found' : 'No customers registered yet'}
+                </h3>
+                <p className="text-xs text-slate-400 mt-1 mb-5 max-w-sm">
+                  {search || selectedTag ? 'Try searching with another name or phone number.' : 'Add your first customer to track billing, visits and order history.'}
+                </p>
+                <button
+                  onClick={openAddCustomer}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-500/20 cursor-pointer"
+                >
+                  + Add New Customer
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {filteredCustomers.map(c => {
+                  const cleanPhone = c.phone.replace(/\D/g, '');
+                  const khataInfo = khataMap.get(normalizePhone(c.phone));
+
+                  return (
+                    <div
+                      key={c.id}
+                      className="bg-white dark:bg-slate-900/90 rounded-3xl border border-slate-200/80 dark:border-slate-800/80 p-5 shadow-xs flex flex-col justify-between gap-4 transition-all hover:shadow-md hover:border-indigo-500/40 group"
+                    >
+                      {/* Top Row: Avatar + Name + Tags + Actions */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3.5">
+                          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500 via-indigo-600 to-purple-600 text-white font-black text-base flex items-center justify-center shadow-md shadow-indigo-500/20 shrink-0">
+                            {c.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <h3 className="font-black text-sm text-slate-900 dark:text-slate-100 tracking-tight leading-snug">
+                              {c.name}
+                            </h3>
+                            <div className="flex items-center gap-1.5 text-xs text-slate-400 font-bold mt-0.5">
+                              <Phone size={12} className="text-indigo-500" />
+                              <span>{c.phone}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => openEditCustomer(c)}
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                            title="Edit Customer"
+                          >
+                            <Edit3 size={15} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCustomer(c.id, c.name)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                            title="Delete Customer"
+                          >
+                            <Trash2 size={15} />
+                          </button>
                         </div>
                       </div>
+
+                      {/* Tags & Khata status */}
+                      <div className="flex flex-wrap gap-1.5">
+                        {(c.tags || []).map(t => (
+                          <span
+                            key={t}
+                            className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${
+                              t === 'VIP'
+                                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                                : t === 'Regular'
+                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                                : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/30'
+                            }`}
+                          >
+                            {t}
+                          </span>
+                        ))}
+                        {c.birthday && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 border border-rose-500/20 flex items-center gap-1">
+                            <Cake size={11} /> {c.birthday}
+                          </span>
+                        )}
+                        {khataInfo && khataInfo.balance > 0 && (
+                          <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30 flex items-center gap-0.5">
+                            <IndianRupee size={10} /> Khata: ₹{khataInfo.balance.toFixed(0)} Due
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Spend & Visit Details */}
+                      <div className="grid grid-cols-3 gap-2 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl text-xs border border-slate-100 dark:border-slate-800/80 text-center">
+                        <div>
+                          <span className="text-[10px] text-slate-400 block font-bold">Total Spent</span>
+                          <strong className="font-black text-emerald-600 dark:text-emerald-400 text-xs">
+                            {formatCurrency(c.totalSpent)}
+                          </strong>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 block font-bold">Visits</span>
+                          <strong className="font-black text-slate-800 dark:text-slate-100 text-xs">
+                            {c.visitCount || 0}
+                          </strong>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 block font-bold">Last Visit</span>
+                          <strong className="font-bold text-slate-600 dark:text-slate-300 text-[11px]">
+                            {formatDate(c.lastVisit)}
+                          </strong>
+                        </div>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex items-center gap-1.5 pt-1">
+                        <a
+                          href={`https://wa.me/91${cleanPhone}?text=${encodeURIComponent(`Hello ${c.name}!`)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 py-2 px-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-extrabold text-xs rounded-xl border border-emerald-500/20 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <MessageSquare size={13} />
+                          WhatsApp
+                        </a>
+
+                        <button
+                          type="button"
+                          onClick={() => openCustomerKhata(c.phone, khataInfo?.id)}
+                          className={`py-2 px-2.5 font-extrabold text-xs rounded-xl border transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                            khataInfo && khataInfo.balance > 0
+                              ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-500/30'
+                              : 'bg-orange-500/10 hover:bg-orange-500/20 text-orange-700 dark:text-orange-300 border-orange-500/20'
+                          }`}
+                          title="Open Khata Ledger"
+                        >
+                          <BookOpen size={13} />
+                          Khata
+                        </button>
+
+                        <button
+                          onClick={() => setViewingCustomer(c)}
+                          className="py-2 px-2.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-black text-xs rounded-xl border border-indigo-500/20 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <History size={13} />
+                          History
+                        </button>
+                      </div>
                     </div>
-
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => openEditCustomer(c)}
-                        className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                        title="Edit Customer"
-                      >
-                        <Edit3 size={15} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteCustomer(c.id, c.name)}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                        title="Delete Customer"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Tags */}
-                  <div className="flex flex-wrap gap-1.5">
-                    {(c.tags || []).map(t => (
-                      <span
-                        key={t}
-                        className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${
-                          t === 'VIP'
-                            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
-                            : t === 'Regular'
-                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
-                            : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/30'
-                        }`}
-                      >
-                        {t}
-                      </span>
-                    ))}
-                    {c.birthday && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 border border-rose-500/20 flex items-center gap-1">
-                        <Cake size={11} /> {c.birthday}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Spend & Visit Details */}
-                  <div className="grid grid-cols-3 gap-2 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl text-xs border border-slate-100 dark:border-slate-800/80 text-center">
-                    <div>
-                      <span className="text-[10px] text-slate-400 block font-bold">Total Spent</span>
-                      <strong className="font-black text-emerald-600 dark:text-emerald-400 text-xs">
-                        {formatCurrency(c.totalSpent)}
-                      </strong>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-slate-400 block font-bold">Visits</span>
-                      <strong className="font-black text-slate-800 dark:text-slate-100 text-xs">
-                        {c.visitCount || 0}
-                      </strong>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-slate-400 block font-bold">Last Visit</span>
-                      <strong className="font-bold text-slate-600 dark:text-slate-300 text-[11px]">
-                        {formatDate(c.lastVisit)}
-                      </strong>
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex items-center gap-2 pt-1">
-                    <a
-                      href={`https://wa.me/91${cleanPhone}?text=${encodeURIComponent(`Hello ${c.name}!`)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 py-2 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-extrabold text-xs rounded-xl border border-emerald-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      <MessageSquare size={13} />
-                      WhatsApp
-                    </a>
-
-                    <a
-                      href={`tel:${c.phone}`}
-                      className="py-2 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl border border-slate-200 dark:border-slate-700 transition-all flex items-center justify-center gap-1 cursor-pointer"
-                      title="Call"
-                    >
-                      <Phone size={13} />
-                    </a>
-
-                    <button
-                      onClick={() => setViewingCustomer(c)}
-                      className="py-2 px-3 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-black text-xs rounded-xl border border-indigo-500/20 transition-all flex items-center justify-center gap-1 cursor-pointer"
-                    >
-                      <History size={13} />
-                      History
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
       {/* ── MODAL: ADD / EDIT CUSTOMER ──────────────────────────────────────── */}
       {showAddEdit && (
@@ -815,6 +915,43 @@ export default function Customers() {
                 💬 <strong>Notes:</strong> {viewingCustomer.notes}
               </div>
             )}
+
+            {/* Khata / Credit Info */}
+            {(() => {
+              const viewingKhataInfo = khataMap.get(normalizePhone(viewingCustomer.phone));
+              return (
+                <div className="p-3.5 bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/20 rounded-2xl border border-orange-200/60 dark:border-orange-900/40 flex items-center justify-between gap-3 mb-3 shrink-0">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400">
+                      <BookOpen size={16} />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-gray-500 dark:text-slate-400 font-bold uppercase block">Khata Account Balance</span>
+                      <div className="text-sm font-black text-gray-800 dark:text-slate-100 flex items-center gap-1">
+                        {viewingKhataInfo && viewingKhataInfo.balance > 0 ? (
+                          <span className="text-rose-600 dark:text-rose-400 font-black">₹{viewingKhataInfo.balance.toFixed(2)} Outstanding Due</span>
+                        ) : (
+                          <span className="text-emerald-600 dark:text-emerald-400 font-black">₹0.00 (All Clear / No Due)</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const phone = viewingCustomer.phone;
+                      const khataId = viewingKhataInfo?.id;
+                      setViewingCustomer(null);
+                      openCustomerKhata(phone, khataId);
+                    }}
+                    className="px-3.5 py-2 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl text-xs font-black shadow-md shadow-orange-500/20 transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
+                  >
+                    <BookOpen size={13} />
+                    Open Khata Ledger
+                  </button>
+                </div>
+              );
+            })()}
 
             {/* Order / Bill History List */}
             <div className="flex-1 overflow-y-auto">

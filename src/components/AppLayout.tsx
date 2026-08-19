@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   LayoutGrid, BookOpen, HelpCircle, Crown, Sun, Moon,
   Zap, LayoutDashboard, BarChart3, Printer, Package, ChefHat, Eye,
-  Settings, Store, User as UserIcon, LogOut, CheckCircle2, XCircle,
+  Settings, Store, LogOut, CheckCircle2, XCircle,
   Unplug, AlertTriangle, Megaphone, Users, Bell, UserCheck
 } from 'lucide-react';
 import { db, useLiveQuery, notifyGlobalChange, getNextKotNumber } from '../db';
@@ -185,8 +185,7 @@ export function AppLayout({
                 label="Stock" active={activeTab === 'stock'} onClick={() => setActiveTab('stock')}
               />
               <NavItem icon={<BarChart3 size={14} />} label="Reports" active={activeTab === 'reports'} onClick={() => setActiveTab('reports')} />
-              <NavItem icon={<Users size={14} />} label="Khata" active={activeTab === 'khata'} onClick={() => setActiveTab('khata')} />
-              <NavItem icon={<UserIcon size={14} />} label="Customers" active={activeTab === 'customers'} onClick={() => setActiveTab('customers')} />
+              <NavItem icon={<Users size={14} />} label="Customers" active={activeTab === 'customers' || activeTab === 'khata'} onClick={() => setActiveTab('customers')} />
               <NavItem icon={<UserCheck size={14} />} label="Staff" active={activeTab === 'staff'} onClick={() => setActiveTab('staff')} />
               <NavItem icon={<Settings size={14} />} label="Settings" active={activeTab === 'settings' || activeTab === 'profile'} onClick={() => setActiveTab('settings')} />
               <NavItem icon={<HelpCircle size={14} />} label="Help" active={activeTab === 'help'} onClick={() => setActiveTab('help')} />
@@ -434,8 +433,7 @@ export function AppLayout({
               <div className="grid grid-cols-4 gap-2">
 
                 <MobileMenuButton icon={<BarChart3 size={20} />} label="Reports" active={activeTab === 'reports'} onClick={() => { setActiveTab('reports'); setShowMobileMenu(false); }} />
-                <MobileMenuButton icon={<Users size={20} />} label="Khata" active={activeTab === 'khata'} onClick={() => { setActiveTab('khata'); setShowMobileMenu(false); }} />
-                <MobileMenuButton icon={<UserIcon size={20} />} label="Customers" active={activeTab === 'customers'} onClick={() => { setActiveTab('customers'); setShowMobileMenu(false); }} />
+                <MobileMenuButton icon={<Users size={20} />} label="Customers" active={activeTab === 'customers' || activeTab === 'khata'} onClick={() => { setActiveTab('customers'); setShowMobileMenu(false); }} />
                 <MobileMenuButton icon={<UserCheck size={20} />} label="Staff" active={activeTab === 'staff'} onClick={() => { setActiveTab('staff'); setShowMobileMenu(false); }} />
                 <MobileMenuButton icon={<BookOpen size={20} />} label="Menu" active={activeTab === 'menu'} onClick={() => { setActiveTab('menu'); setShowMobileMenu(false); }} />
                 <MobileMenuButton
