@@ -1,8 +1,13 @@
-import { useState, useEffect } from 'react';
-import { Utensils, Mail, Lock, Store, ArrowRight, Loader2, Phone, Eye, EyeOff } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { 
+  Mail, ArrowRight, Loader2, Eye, EyeOff, Lock, 
+  Sun, Moon,
+  HelpCircle, RefreshCw, CheckCircle2
+} from 'lucide-react';
 import { supabase } from '../supabase';
 import { User } from '@supabase/supabase-js';
 import { useToast } from './Toast';
+import { useTheme } from '../contexts/ThemeContext';
 
 const BLOCKED_EMAIL_DOMAINS = [
   'mailinator.com', 'tempmail.com', 'guerrillamail.com', '10minutemail.com',
@@ -30,6 +35,8 @@ interface Props {
 
 export default function LoginScreen({ onLoginSuccess }: Props) {
   const { showToast } = useToast();
+  const { toggleTheme, isDark } = useTheme();
+
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -43,41 +50,53 @@ export default function LoginScreen({ onLoginSuccess }: Props) {
   const [showVerifyEmail, setShowVerifyEmail] = useState(false);
   const [verifyEmail, setVerifyEmail] = useState('');
   const [tempPassword, setTempPassword] = useState('');
-  // Fix 1: Brute-force login protection
+  
   const [loginAttempts, setLoginAttempts] = useState(0);
   const [loginLockedUntil, setLoginLockedUntil] = useState<number | null>(null);
   const [lockCountdown, setLockCountdown] = useState(0);
-  // Fix 2: Signup spam protection
   const [signupBlocked, setSignupBlocked] = useState(false);
   const [signupBlockedUntil, setSignupBlockedUntil] = useState<number | null>(null);
   const [signupCountdown, setSignupCountdown] = useState(0);
-  // Fix 3: Password visibility
   const [showPassword, setShowPassword] = useState(false);
+
+  // ─── Splash Animation ─────────────────────────────────────────────────
+  const [splashPhase, setSplashPhase] = useState<'logo-in' | 'logo-hold' | 'logo-out' | 'done'>('logo-in');
+  const logoTargetRef = useRef<HTMLDivElement>(null);
+
+  // ─── Effects ──────────────────────────────────────────────────────────────
+
+  // Splash animation sequence
+  useEffect(() => {
+    // Phase 1: Logo scales in (CSS handles this)
+    const t1 = setTimeout(() => setSplashPhase('logo-hold'), 100);
+    // Phase 2: Hold the logo centered
+    const t2 = setTimeout(() => setSplashPhase('logo-out'), 1200);
+    // Phase 3: Logo shrinks and flies to final position
+    const t3 = setTimeout(() => setSplashPhase('done'), 2200);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, []);
+
 
   useEffect(() => {
     const savedEmail = localStorage.getItem('rememberedEmail');
-    if (savedEmail) {
-      setEmail(savedEmail);
-      setRememberMe(true);
+    if (savedEmail) { 
+      setEmail(savedEmail); 
+      setRememberMe(true); 
     }
-    // Clean up any previously stored passwords (security fix)
     localStorage.removeItem('rememberedPassword');
   }, []);
 
   useEffect(() => {
     const pendingEmail = localStorage.getItem('pendingVerificationEmail');
-    if (pendingEmail) {
-      setVerifyEmail(pendingEmail);
-      setShowVerifyEmail(true);
+    if (pendingEmail) { 
+      setVerifyEmail(pendingEmail); 
+      setShowVerifyEmail(true); 
     }
-
-    // Check for hash errors in URL redirect from confirmation/reset failure
     const hash = window.location.hash;
     if (hash && hash.includes('error=')) {
       const params = new URLSearchParams(hash.substring(1));
       const errorMsg = params.get('error_description') || params.get('error') || 'Authentication failed.';
       setError(decodeURIComponent(errorMsg).replace(/\+/g, ' '));
-      // Clear hash to prevent duplicate alerts and state pollution
       window.history.replaceState(null, '', window.location.origin);
     }
   }, []);
@@ -85,374 +104,440 @@ export default function LoginScreen({ onLoginSuccess }: Props) {
   const checkVerificationStatus = async (showFeedback = false) => {
     if (!supabase || !verifyEmail || !tempPassword) return;
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: verifyEmail,
-        password: tempPassword,
+      const { data, error } = await supabase.auth.signInWithPassword({ 
+        email: verifyEmail, 
+        password: tempPassword 
       });
-      
-      if (error) {
-        if (showFeedback) {
-          showToast('Email is not yet verified. Please check your inbox.', 'error');
-        }
-        return;
+      if (error) { 
+        if (showFeedback) showToast('Email not yet verified. Please check your inbox.', 'error'); 
+        return; 
       }
-      
       if (data.user) {
-        showToast('Email verified successfully! Welcome to Siya Bill.', 'success');
-        setShowVerifyEmail(false);
+        showToast('Email verified! Welcome to Siya Bill.', 'success');
+        setShowVerifyEmail(false); 
         setTempPassword('');
         localStorage.removeItem('pendingVerificationEmail');
         handleSuccessfulLogin(data.user);
       }
-    } catch (_) {
-      // ignore
-    }
+    } catch (_) { /* ignore */ }
   };
 
   useEffect(() => {
     if (!showVerifyEmail || !tempPassword) return;
-    const interval = setInterval(() => {
-      checkVerificationStatus(false);
-    }, 5000);
+    const interval = setInterval(() => checkVerificationStatus(false), 5000);
     return () => clearInterval(interval);
   }, [showVerifyEmail, tempPassword, verifyEmail]);
 
-  // Load lockout state from localStorage on email change
   useEffect(() => {
     const stored = localStorage.getItem(`loginAttempts_${email}`);
     if (stored) {
       const { attempts, lockedUntil } = JSON.parse(stored);
       setLoginAttempts(attempts || 0);
-      if (lockedUntil && lockedUntil > Date.now()) {
-        setLoginLockedUntil(lockedUntil);
-      } else {
-        setLoginLockedUntil(null);
-      }
+      setLoginLockedUntil(lockedUntil && lockedUntil > Date.now() ? lockedUntil : null);
     }
   }, [email]);
 
-  // Login lockout countdown timer
   useEffect(() => {
     if (!loginLockedUntil) { setLockCountdown(0); return; }
-    const tick = () => {
-      const remaining = Math.max(0, Math.ceil((loginLockedUntil - Date.now()) / 1000));
-      setLockCountdown(remaining);
-      if (remaining === 0) setLoginLockedUntil(null);
+    const tick = () => { 
+      const r = Math.max(0, Math.ceil((loginLockedUntil - Date.now()) / 1000)); 
+      setLockCountdown(r); 
+      if (r === 0) setLoginLockedUntil(null); 
     };
-    tick();
-    const interval = setInterval(tick, 1000);
+    tick(); 
+    const interval = setInterval(tick, 1000); 
     return () => clearInterval(interval);
   }, [loginLockedUntil]);
 
-  // Load signup block state from localStorage on mount
   useEffect(() => {
     const fp = getDeviceFingerprint();
     const stored = localStorage.getItem(`signupLog_${fp}`);
     if (stored) {
       const { signups, blockedUntil } = JSON.parse(stored);
-      if (blockedUntil && blockedUntil > Date.now()) {
-        setSignupBlocked(true);
-        setSignupBlockedUntil(blockedUntil);
+      if (blockedUntil && blockedUntil > Date.now()) { 
+        setSignupBlocked(true); 
+        setSignupBlockedUntil(blockedUntil); 
       } else {
-        // Clean expired entries
         const fresh = (signups || []).filter((t: number) => t > Date.now() - 86400000);
-        if (fresh.length >= 3) {
-          const newBlockedUntil = Math.min(...fresh) + 86400000;
-          setSignupBlocked(true);
-          setSignupBlockedUntil(newBlockedUntil);
+        if (fresh.length >= 3) { 
+          const bu = Math.min(...fresh) + 86400000; 
+          setSignupBlocked(true); 
+          setSignupBlockedUntil(bu); 
         }
       }
     }
   }, []);
 
-  // Signup block countdown timer
   useEffect(() => {
     if (!signupBlockedUntil) { setSignupCountdown(0); return; }
-    const tick = () => {
-      const remaining = Math.max(0, Math.ceil((signupBlockedUntil - Date.now()) / 1000));
-      setSignupCountdown(remaining);
-      if (remaining === 0) { setSignupBlocked(false); setSignupBlockedUntil(null); }
+    const tick = () => { 
+      const r = Math.max(0, Math.ceil((signupBlockedUntil - Date.now()) / 1000)); 
+      setSignupCountdown(r); 
+      if (r === 0) { 
+        setSignupBlocked(false); 
+        setSignupBlockedUntil(null); 
+      } 
     };
-    tick();
-    const interval = setInterval(tick, 1000);
+    tick(); 
+    const interval = setInterval(tick, 1000); 
     return () => clearInterval(interval);
   }, [signupBlockedUntil]);
 
+  // ─── Helpers ──────────────────────────────────────────────────────────────
 
-  // Brute-force helpers
-  const getLoginDelay = (attempts: number): number => {
-    if (attempts <= 2) return 0;
-    if (attempts === 3) return 5000;
-    if (attempts === 4) return 30000;
-    if (attempts === 5) return 120000;
-    return 900000; // 15 minutes
+  const getLoginDelay = (a: number) => a <= 2 ? 0 : a === 3 ? 5000 : a === 4 ? 30000 : a === 5 ? 120000 : 900000;
+
+  const recordFailedAttempt = (cur: number) => {
+    const n = cur + 1, d = getLoginDelay(n), lu = d > 0 ? Date.now() + d : null;
+    setLoginAttempts(n); 
+    setLoginLockedUntil(lu);
+    localStorage.setItem(`loginAttempts_${email}`, JSON.stringify({ attempts: n, lockedUntil: lu }));
   };
 
-  const recordFailedAttempt = (currentAttempts: number) => {
-    const newAttempts = currentAttempts + 1;
-    const delay = getLoginDelay(newAttempts);
-    const lockedUntil = delay > 0 ? Date.now() + delay : null;
-    setLoginAttempts(newAttempts);
-    setLoginLockedUntil(lockedUntil);
-    localStorage.setItem(`loginAttempts_${email}`, JSON.stringify({
-      attempts: newAttempts,
-      lockedUntil
-    }));
+  const clearLoginAttempts = () => { 
+    setLoginAttempts(0); 
+    setLoginLockedUntil(null); 
+    localStorage.removeItem(`loginAttempts_${email}`); 
   };
 
-  const clearLoginAttempts = () => {
-    setLoginAttempts(0);
-    setLoginLockedUntil(null);
-    localStorage.removeItem(`loginAttempts_${email}`);
-  };
-
-  // Signup spam helper
   const recordSignupAttempt = () => {
     const fp = getDeviceFingerprint();
     const stored = localStorage.getItem(`signupLog_${fp}`);
     const existing = stored ? JSON.parse(stored) : { signups: [] };
     const fresh = (existing.signups || []).filter((t: number) => t > Date.now() - 86400000);
     fresh.push(Date.now());
-    let newBlockedUntil: number | null = null;
-    if (fresh.length >= 3) {
-      newBlockedUntil = Math.min(...fresh) + 86400000;
-      setSignupBlocked(true);
-      setSignupBlockedUntil(newBlockedUntil);
+    let bu: number | null = null;
+    if (fresh.length >= 3) { 
+      bu = Math.min(...fresh) + 86400000; 
+      setSignupBlocked(true); 
+      setSignupBlockedUntil(bu); 
     }
-    localStorage.setItem(`signupLog_${fp}`, JSON.stringify({ signups: fresh, blockedUntil: newBlockedUntil }));
+    localStorage.setItem(`signupLog_${fp}`, JSON.stringify({ signups: fresh, blockedUntil: bu }));
   };
 
   const handleSuccessfulLogin = (user: User) => {
     clearLoginAttempts();
-    if (rememberMe) {
-      localStorage.setItem('rememberedEmail', email);
-    } else {
-      localStorage.removeItem('rememberedEmail');
-    }
+    if (rememberMe) localStorage.setItem('rememberedEmail', email);
+    else localStorage.removeItem('rememberedEmail');
     onLoginSuccess(user);
   };
 
+  // ─── Form Handlers ────────────────────────────────────────────────────────
+
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!navigator.onLine) {
-      setError('An active internet connection is required to reset password.');
-      return;
+    if (!navigator.onLine) { 
+      setError('An active internet connection is required for password reset.'); 
+      return; 
     }
-    setLoading(true);
+    setLoading(true); 
     setError('');
     try {
-      if (!supabase) throw new Error('Database is not connected!');
+      if (!supabase) throw new Error('Database service unavailable.');
       const rawSiteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
       const siteUrl = rawSiteUrl.endsWith('/') ? rawSiteUrl : `${rawSiteUrl}/`;
-      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-        redirectTo: siteUrl,
-      });
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, { redirectTo: siteUrl });
       if (error) throw error;
-      showToast('Password reset link sent! Please check your email.', 'success');
+      showToast('Password reset link has been sent to your email!', 'success');
       setShowForgotPassword(false);
-    } catch (err: any) {
-      setError(err.message || 'An error occurred.');
-    } finally {
-      setLoading(false);
+    } catch (err: any) { 
+      setError(err.message || 'An error occurred during password reset.'); 
+    } finally { 
+      setLoading(false); 
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Check if account is locked
-    if (loginLockedUntil && loginLockedUntil > Date.now()) {
-      setError(`Too many failed attempts. Please wait ${lockCountdown} seconds before trying again.`);
-      return;
+    if (loginLockedUntil && loginLockedUntil > Date.now()) { 
+      setError(`Too many failed attempts. Please wait ${lockCountdown} seconds.`); 
+      return; 
     }
-
-    // Check signup spam limit
     if (!isLogin) {
-      // Block disposable email domains
-      const emailDomain = email.split('@')[1]?.toLowerCase() || '';
-      if (BLOCKED_EMAIL_DOMAINS.includes(emailDomain)) {
-        setError('Disposable email addresses are not allowed. Please use your real email address.');
-        return;
+      const domain = email.split('@')[1]?.toLowerCase() || '';
+      if (BLOCKED_EMAIL_DOMAINS.includes(domain)) { 
+        setError('Temporary or disposable email addresses are not allowed. Please enter a valid email.'); 
+        return; 
       }
-      // Block if device has created too many accounts recently
-      if (signupBlocked) {
-        const hours = Math.ceil(signupCountdown / 3600);
-        setError(`Maximum accounts for today have been created from this device. Please try again after ${hours > 1 ? hours + ' hours' : signupCountdown + ' seconds'}.`);
-        return;
+      if (signupBlocked) { 
+        setError(`Daily account creation limit reached from this device. Please try again in ${Math.ceil(signupCountdown / 3600)} hours.`); 
+        return; 
       }
     }
-
-    if (!navigator.onLine) {
-      setError('An active internet connection is required to login or register.');
-      return;
+    if (!navigator.onLine) { 
+      setError('An active internet connection is required to sign in or register.'); 
+      return; 
     }
-    setLoading(true);
+    setLoading(true); 
     setError('');
 
     try {
-      if (!supabase) {
-        throw new Error('Database is not connected! Please contact administrator.');
-      }
-
+      if (!supabase) throw new Error('Database service unavailable. Please contact support.');
+      
       if (isLogin) {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        if (data.user) {
-            handleSuccessfulLogin(data.user);
-        }
+        if (data.user) handleSuccessfulLogin(data.user);
       } else {
-        if (!phone.trim()) {
-          throw new Error('Mobile number is strictly required for registration!');
-        }
+        if (!phone.trim()) throw new Error('A valid 10-digit mobile number is required!');
         const rawSiteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
         const siteUrl = rawSiteUrl.endsWith('/') ? rawSiteUrl : `${rawSiteUrl}/`;
         const { data, error } = await supabase.auth.signUp({
-          email,
+          email, 
           password,
-          options: {
-            emailRedirectTo: siteUrl,
-            data: {
-              restaurant_name: restaurantName,
-              phone: phone.trim(),
-            }
+          options: { 
+            emailRedirectTo: siteUrl, 
+            data: { 
+              restaurant_name: restaurantName, 
+              phone: phone.trim() 
+            } 
           }
         });
         if (error) throw error;
-        if (data?.session && data.user) {
-          recordSignupAttempt();
-          showToast('Account created and signed in successfully!', 'success');
-          handleSuccessfulLogin(data.user);
+        if (data?.session && data.user) { 
+          recordSignupAttempt(); 
+          showToast('Account created successfully!', 'success'); 
+          handleSuccessfulLogin(data.user); 
         } else {
-          recordSignupAttempt();
-          showToast('Account created successfully! Please check your email to verify.', 'success');
-          // Show verification pending screen if email not yet confirmed
-          if (data?.user && !data.user.email_confirmed_at) {
-            setVerifyEmail(email);
-            setTempPassword(password);
-            setShowVerifyEmail(true);
-            localStorage.setItem('pendingVerificationEmail', email);
+          recordSignupAttempt(); 
+          showToast('Account created! Please check your verification email.', 'success');
+          if (data?.user && !data.user.email_confirmed_at) { 
+            setVerifyEmail(email); 
+            setTempPassword(password); 
+            setShowVerifyEmail(true); 
+            localStorage.setItem('pendingVerificationEmail', email); 
           } else {
             setIsLogin(true);
           }
         }
       }
-    } catch (err: any) {
-      if (isLogin) {
-        recordFailedAttempt(loginAttempts);
-      }
-      setError(err.message || 'An error occurred during authentication.');
-    } finally {
-      setLoading(false);
+    } catch (err: any) { 
+      if (isLogin) recordFailedAttempt(loginAttempts); 
+      setError(err.message || 'Authentication error.'); 
+    } finally { 
+      setLoading(false); 
     }
   };
 
-  /* Shared input class for consistent premium styling */
-  const inputClass = `w-full pl-12 pr-4 py-3.5 rounded-xl font-medium transition-all duration-200
-    bg-white/80 dark:bg-white/5 border border-gray-200 dark:border-white/10
-    text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500
-    focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 dark:focus:border-orange-400
-    backdrop-blur-sm shadow-sm dark:shadow-none`;
+  // ─── Styles ──────────────────────────────────────────────────────────────
 
-  const labelClass = 'text-sm font-bold text-gray-700 dark:text-gray-300 transition-colors';
-
-  const iconWrapperClass = 'absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400 dark:text-gray-500';
+  const inputClass = "w-full px-4 py-3 rounded-xl text-sm bg-white/80 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 focus:bg-white dark:focus:bg-slate-800 transition-all duration-200 backdrop-blur-sm";
 
   return (
-    <div className="relative flex items-center justify-center min-h-screen w-full overflow-y-auto font-sans transition-colors duration-300 bg-[#FAFBFC] dark:bg-[#0B0F19]">
+    <div className="h-screen w-full flex items-center justify-center font-sans selection:bg-orange-500 selection:text-white overflow-hidden relative bg-gradient-to-br from-orange-50 via-white to-amber-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
 
-      {/* ── Animated Gradient Background ── */}
-      <div className="absolute inset-0 overflow-hidden">
-        {/* Base gradient layer */}
-        <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 via-transparent to-indigo-500/10 dark:from-orange-500/5 dark:via-transparent dark:to-indigo-500/5" />
+      {/* CSS Keyframes */}
+      <style>{`
+        @keyframes logoFloat {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-6px); }
+        }
+        @keyframes shimmer {
+          0% { transform: translateX(-150%) rotate(25deg); }
+          100% { transform: translateX(150%) rotate(25deg); }
+        }
+        @keyframes pulseGlow {
+          0%, 100% { opacity: 0.4; transform: scale(1); }
+          50% { opacity: 0.8; transform: scale(1.15); }
+        }
+        @keyframes borderSpin {
+          0% { background-position: 0% 50%; }
+          100% { background-position: 200% 50%; }
+        }
+        @keyframes splashPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(249,115,22,0.4); }
+          50% { box-shadow: 0 0 0 20px rgba(249,115,22,0); }
+        }
+      `}</style>
 
-        {/* Animated floating orbs */}
-        <div className="absolute top-[-20%] left-[-10%] w-[40rem] h-[40rem] rounded-full bg-orange-400/20 dark:bg-orange-500/10 blur-3xl animate-pulse [animation-duration:8s]" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[35rem] h-[35rem] rounded-full bg-indigo-400/20 dark:bg-indigo-500/10 blur-3xl animate-pulse [animation-duration:10s]" />
-        <div className="absolute top-[40%] left-[60%] w-[25rem] h-[25rem] rounded-full bg-orange-300/10 dark:bg-orange-600/5 blur-3xl animate-pulse [animation-duration:12s]" />
+      {/* ═══ SPLASH OVERLAY ═══ */}
+      {splashPhase !== 'done' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-orange-50 via-white to-amber-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
 
-        {/* Subtle grid overlay */}
-        <div
-          className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05] bg-[radial-gradient(circle,_#000000_1px,_transparent_1px)] dark:bg-[radial-gradient(circle,_#ffffff_1px,_transparent_1px)] bg-[size:32px_32px]"
+          {/* Pulsing glow rings */}
+          <div
+            className="absolute rounded-full"
+            style={{
+              width: '260px', height: '260px',
+              background: 'radial-gradient(circle, rgba(249,115,22,0.15) 0%, transparent 70%)',
+              animation: splashPhase === 'logo-hold' ? 'pulseGlow 2s ease-in-out infinite' : 'none',
+              opacity: splashPhase === 'logo-in' ? 0 : 1,
+              transition: 'opacity 0.5s',
+            }}
+          />
+
+          {/* Main splash logo */}
+          <div
+            className="rounded-3xl flex items-center justify-center relative overflow-hidden"
+            style={{
+              transition: 'all 0.8s cubic-bezier(0.4, 0, 0.2, 1)',
+              width: splashPhase === 'logo-out' ? '112px' : '180px',
+              height: splashPhase === 'logo-out' ? '96px' : '180px',
+              opacity: splashPhase === 'logo-in' ? 0 : 1,
+              transform: splashPhase === 'logo-in'
+                ? 'scale(0.3) rotate(-10deg)'
+                : splashPhase === 'logo-hold'
+                  ? 'scale(1) rotate(0deg)'
+                  : 'scale(0.6)',
+              background: 'linear-gradient(135deg, #f97316, #f59e0b, #f97316, #ea580c)',
+              backgroundSize: '200% 200%',
+              animation: splashPhase === 'logo-hold'
+                ? 'borderSpin 3s linear infinite, splashPulse 1.5s ease-in-out infinite'
+                : 'borderSpin 3s linear infinite',
+              padding: '3px',
+            }}
+          >
+            <div className="w-full h-full rounded-[21px] bg-white dark:bg-slate-900 flex items-center justify-center overflow-hidden p-4 relative">
+              <img src="/icon.png" alt="Siya Bill" className="w-full h-full object-contain relative z-10" />
+              {/* Shimmer sweep */}
+              <div
+                className="absolute inset-0 z-20 pointer-events-none"
+                style={{
+                  background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%)',
+                  animation: splashPhase === 'logo-hold' ? 'shimmer 2s ease-in-out infinite' : 'none',
+                  width: '60%', height: '100%',
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Subtle ambient glow */}
+      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-orange-400/10 dark:bg-orange-500/5 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/4" />
+      <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-amber-300/10 dark:bg-amber-500/5 rounded-full blur-[100px] translate-y-1/3 -translate-x-1/4" />
+
+      {/* Large blended watermark logo behind */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <img
+          src="/icon.png"
+          alt=""
+          className="w-[500px] h-[500px] object-contain opacity-[0.04] dark:opacity-[0.03] select-none"
+          draggable={false}
         />
       </div>
 
-      {/* ── Centered Glass Card ── */}
-      <div className="relative z-10 w-full max-w-md mx-4">
-        <div className="bg-white/70 dark:bg-slate-900/60 backdrop-blur-2xl rounded-3xl border border-white/50 dark:border-white/10 shadow-2xl shadow-black/5 dark:shadow-black/30 p-5 sm:p-10 transition-all duration-300">
+      {/* Top-right controls */}
+      <div
+        className="absolute top-4 right-4 z-20 flex items-center gap-2 transition-all duration-700"
+        style={{ opacity: splashPhase === 'done' ? 1 : 0, transform: splashPhase === 'done' ? 'translateY(0)' : 'translateY(-10px)' }}
+      >
+        <a
+          href="https://wa.me/918677994666?text=Hi%20Guddu,%20I%20need%20help%20with%20Siya%20Bill%20POS"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/60 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-semibold backdrop-blur-md border border-slate-200/50 dark:border-slate-700/50 transition-all"
+        >
+          <HelpCircle size={13} className="text-orange-500" />
+          Support
+        </a>
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="p-2 rounded-full bg-white/60 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 backdrop-blur-md border border-slate-200/50 dark:border-slate-700/50 transition-all cursor-pointer"
+          title={isDark ? "Light Mode" : "Dark Mode"}
+          aria-label="Toggle Theme"
+        >
+          {isDark ? <Sun size={15} className="text-amber-400" /> : <Moon size={15} />}
+        </button>
+      </div>
 
-          {/* ── Brand Header ── */}
-          <div className="flex flex-col items-center mb-8">
-            <div className="relative mb-4">
-              <div className="absolute inset-0 bg-gradient-to-br from-orange-500 to-indigo-500 rounded-2xl blur-lg opacity-40" />
-              <div className="relative bg-gradient-to-br from-orange-500 to-orange-600 w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-500/25">
-                <Utensils size={30} className="text-white" />
+      {/* ── Main Card ── */}
+      <div
+        className="relative z-10 w-full max-w-md mx-4 transition-all duration-700"
+        style={{ opacity: splashPhase === 'done' ? 1 : 0, transform: splashPhase === 'done' ? 'translateY(0)' : 'translateY(20px)' }}
+      >
+
+        <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl rounded-3xl shadow-xl shadow-black/5 dark:shadow-black/30 border border-white/80 dark:border-slate-800/80 p-8 sm:p-10">
+
+          {/* Logo — animated */}
+          <div className="flex flex-col items-center text-center mb-8" ref={logoTargetRef}>
+            <div
+              className="w-28 h-24 rounded-2xl relative overflow-hidden"
+              style={{
+                background: 'linear-gradient(135deg, #f97316, #f59e0b, #f97316, #ea580c)',
+                backgroundSize: '200% 200%',
+                animation: 'borderSpin 4s linear infinite, logoFloat 3s ease-in-out infinite',
+                padding: '2px',
+                boxShadow: '0 8px 30px rgba(249,115,22,0.2)',
+              }}
+            >
+              <div className="w-full h-full rounded-[14px] bg-white dark:bg-slate-900 flex items-center justify-center overflow-hidden p-3 relative">
+                <img src="/icon.png" alt="Siya Bill" className="w-full h-full object-contain relative z-10" />
+                {/* Shimmer shine */}
+                <div
+                  className="absolute inset-0 z-20 pointer-events-none"
+                  style={{
+                    background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%)',
+                    animation: 'shimmer 3s ease-in-out infinite',
+                    animationDelay: '1s',
+                    width: '50%', height: '100%',
+                  }}
+                />
               </div>
             </div>
-            <h1 className="text-2xl font-black tracking-tight text-gray-900 dark:text-white transition-colors">
-              SIYA BILL
-            </h1>
-            <p className="text-xs font-semibold tracking-[0.2em] uppercase text-gray-400 dark:text-gray-500 mt-1 transition-colors">
-              Restaurant POS
+          </div>
+
+
+          {/* Title */}
+          <div className="text-center mb-6">
+            <h2 className="text-2xl font-black tracking-tight bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 bg-clip-text text-transparent">
+              {showForgotPassword ? 'Reset Password' : 'SIYA BILL'}
+            </h2>
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mt-1 tracking-wide">
+              {showForgotPassword
+                ? 'Enter your email to reset password'
+                : 'Smart Restaurant POS & Billing Solution'}
             </p>
           </div>
 
-          {/* ── Verification Pending Screen OR Normal Form ── */}
+          {/* Verification Pending */}
           {showVerifyEmail ? (
-            <div className="flex flex-col items-center gap-5 py-4">
-              <div className="relative">
-                <div className="absolute inset-0 rounded-full bg-orange-500/20 dark:bg-orange-500/10 animate-ping" />
-                <div className="relative w-20 h-20 rounded-full bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center border border-orange-500/20 shadow-inner">
-                  <Mail size={36} className="text-orange-500 animate-bounce" />
-                </div>
+            <div className="text-center space-y-4">
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-orange-100 dark:bg-orange-950/50 text-orange-500 flex items-center justify-center">
+                <Mail size={26} />
               </div>
-
-              <div className="text-center">
-                <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2">Email Verify Karein</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
-                  Aapke email <span className="font-bold text-gray-700 dark:text-gray-200 break-all">{verifyEmail}</span> par verification link bheja gaya hai.
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Verify Your Email</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  Verification link sent to <span className="font-semibold text-slate-700 dark:text-slate-200 break-all">{verifyEmail}</span>
                 </p>
-                <p className="text-xs text-orange-500 dark:text-orange-400 font-bold mt-2 flex items-center justify-center gap-1.5">
-                  <Loader2 size={12} className="animate-spin" /> Auto-checking status in background...
-                </p>
+                <div className="inline-flex items-center gap-1.5 text-xs text-orange-600 dark:text-orange-400 font-semibold mt-3 px-3 py-1 rounded-full bg-orange-50 dark:bg-orange-950/40">
+                  <RefreshCw size={12} className="animate-spin" /> Checking...
+                </div>
               </div>
 
               {tempPassword && (
                 <button
                   type="button"
                   onClick={() => checkVerificationStatus(true)}
-                  className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-4 rounded-xl transition-all duration-200 shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 active:scale-[0.98]"
+                  className="w-full py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-sm rounded-xl transition-all shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 active:scale-[0.98] cursor-pointer"
                 >
-                  I Have Verified My Email <ArrowRight size={18} />
+                  I've Verified <ArrowRight size={15} />
                 </button>
               )}
 
-              <div className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-4 text-xs text-gray-500 dark:text-gray-400 flex flex-col gap-2">
-                <p className="font-bold text-gray-700 dark:text-gray-300">💡 Next Steps:</p>
-                <ul className="list-disc pl-4 space-y-1">
-                  <li>Check your mailbox on your phone/computer.</li>
-                  <li>Click the verification link in the email from Supabase.</li>
-                  <li>Once verified, this screen will auto-login!</li>
-                </ul>
-              </div>
-
-              <div className="flex flex-col items-center gap-3 w-full mt-2">
+              <div className="text-center space-y-2 pt-2">
                 <button
                   type="button"
                   onClick={async () => {
-                    if (!supabase) return;
                     try {
-                      await supabase.auth.resend({ type: 'signup', email: verifyEmail });
-                      showToast('Verification email resent successfully!', 'success');
-                    } catch { showToast('Resend failed. Please try again later.', 'error'); }
+                      if (!supabase) return;
+                      const { error } = await supabase.auth.resend({
+                        type: 'signup',
+                        email: verifyEmail,
+                      });
+                      if (error) throw error;
+                      showToast('Verification email resent!', 'success');
+                    } catch (err: any) {
+                      showToast('Resend failed.', 'error');
+                    }
                   }}
-                  className="text-sm font-bold text-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+                  className="text-sm font-semibold text-orange-600 dark:text-orange-400 hover:underline cursor-pointer"
                 >
-                  Didn't receive the email? Resend
+                  Resend email
                 </button>
-
+                <br />
                 <button
                   type="button"
                   onClick={() => {
@@ -461,253 +546,140 @@ export default function LoginScreen({ onLoginSuccess }: Props) {
                     localStorage.removeItem('pendingVerificationEmail');
                     setIsLogin(true);
                   }}
-                  className="text-xs font-semibold text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors mt-2"
+                  className="text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
                 >
-                  ← Back to Login Screen
+                  ← Back to sign in
                 </button>
               </div>
             </div>
           ) : (
-            <>
-              {/* ── Section Title ── */}
-              <div className="mb-6 text-center">
-                <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 tracking-tight transition-colors">
-                  {showForgotPassword ? 'Reset Password' : (isLogin ? 'Welcome Back' : 'Create Account')}
-                </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mt-1.5 transition-colors">
-                  {showForgotPassword
-                    ? 'Enter your email to receive a password reset link.'
-                    : (isLogin
-                      ? 'Enter your credentials to access your dashboard.'
-                      : 'Sign up to get started with your new restaurant POS.')}
-                </p>
-              </div>
+            <div className="space-y-4">
 
-              {/* ── Lockout Banner ── */}
+              {/* Lockout */}
               {loginLockedUntil && lockCountdown > 0 && (
-                <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-500/20 text-orange-700 dark:text-orange-400 px-4 py-3 rounded-xl mb-5 text-sm font-bold flex flex-col gap-1 transition-colors animate-[fadeIn_0.2s_ease-out]">
-                  <span>🔒 Account temporarily locked</span>
-                  <span className="font-mono text-base">{Math.floor(lockCountdown / 60)}:{String(lockCountdown % 60).padStart(2, '0')} until unlock</span>
+                <div className="flex items-center gap-2.5 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-800/40 text-amber-700 dark:text-amber-300 text-sm font-medium">
+                  <Lock size={15} className="shrink-0" />
+                  Too many failed attempts. Wait {Math.floor(lockCountdown / 60)}:{String(lockCountdown % 60).padStart(2, '0')}
                 </div>
               )}
 
-              {/* ── Error Banner ── */}
+              {/* Error */}
               {error && (
-                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 px-4 py-3 rounded-xl mb-5 text-sm font-bold flex items-center gap-2 transition-colors animate-[fadeIn_0.2s_ease-out]">
-                  <span className="flex-1">{error}</span>
+                <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200/60 dark:border-red-800/40 text-red-600 dark:text-red-300 text-sm font-medium">
+                  {error}
                 </div>
               )}
 
-              {/* ── Forgot Password Form ── */}
+              {/* Forgot Password Form */}
               {showForgotPassword ? (
-                <form onSubmit={handleForgotPassword} className="flex flex-col gap-5">
-                  <div className="flex flex-col gap-2">
-                    <label className={labelClass}>Email Address</label>
-                    <div className="relative">
-                      <div className={iconWrapperClass}>
-                        <Mail size={18} />
-                      </div>
-                      <input
-                        type="email"
-                        required
-                        value={resetEmail}
-                        onChange={(e) => setResetEmail(e.target.value)}
-                        className={inputClass}
-                        placeholder="owner@restaurant.com"
-                      />
-                    </div>
+                <form onSubmit={handleForgotPassword} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">Email Address</label>
+                    <input type="email" required value={resetEmail} onChange={e => setResetEmail(e.target.value)} className={inputClass} placeholder="your@email.com" />
                   </div>
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-4 rounded-xl mt-2 transition-all duration-200 shadow-lg shadow-orange-500/20 dark:shadow-orange-500/10 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed hover:shadow-xl hover:shadow-orange-500/25 active:scale-[0.98]"
+                    className="w-full py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-sm rounded-xl shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 disabled:opacity-60 active:scale-[0.98] cursor-pointer transition-all"
                   >
-                    {loading ? <Loader2 size={20} className="animate-spin" /> : 'Send Reset Link'}
-                    {!loading && <ArrowRight size={18} />}
+                    {loading ? <Loader2 size={16} className="animate-spin" /> : <><span>Send Reset Link</span><ArrowRight size={15} /></>}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowForgotPassword(false)}
-                    className="text-sm font-bold text-gray-500 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 mt-1 transition-colors"
-                  >
-                    ← Back to Sign In
+                  <button type="button" onClick={() => setShowForgotPassword(false)} className="w-full text-center text-sm font-semibold text-slate-500 hover:text-orange-600 dark:text-slate-400 cursor-pointer">
+                    ← Back to login
                   </button>
                 </form>
               ) : (
-                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                <form onSubmit={handleSubmit} className="space-y-4">
+
+                  {/* Sign Up Fields */}
                   {!isLogin && (
                     <>
-                      {/* Restaurant Name */}
-                      <div className="flex flex-col gap-2">
-                        <label className={labelClass}>Restaurant Name</label>
-                        <div className="relative">
-                          <div className={iconWrapperClass}>
-                            <Store size={18} />
-                          </div>
-                          <input
-                            type="text"
-                            required
-                            value={restaurantName}
-                            onChange={(e) => setRestaurantName(e.target.value)}
-                            className={inputClass}
-                            placeholder="Your Restaurant Name"
-                          />
-                        </div>
+                      <div className="space-y-1.5">
+                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">Restaurant Name</label>
+                        <input type="text" required value={restaurantName} onChange={e => setRestaurantName(e.target.value)} className={inputClass} placeholder="Your restaurant name" />
                       </div>
-
-                      {/* Mobile Number */}
-                      <div className="flex flex-col gap-2">
-                        <label className={labelClass}>Mobile Number</label>
-                        <div className="relative">
-                          <div className={iconWrapperClass}>
-                            <Phone size={18} />
-                          </div>
-                          <input
-                            type="tel"
-                            required
-                            value={phone}
-                            onChange={(e) => setPhone(e.target.value)}
-                            className={inputClass}
-                            placeholder="10-Digit Mobile Number"
-                            pattern="[0-9]{10}"
-                            title="Please enter a valid 10-digit mobile number"
-                          />
-                        </div>
+                      <div className="space-y-1.5">
+                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">Mobile Phone</label>
+                        <input type="tel" required value={phone} onChange={e => setPhone(e.target.value)} className={inputClass} placeholder="10-digit mobile number" pattern="[0-9]{10}" title="10-digit number" />
                       </div>
                     </>
                   )}
 
                   {/* Email */}
-                  <div className="flex flex-col gap-2">
-                    <label className={labelClass}>Email Address</label>
-                    <div className="relative">
-                      <div className={iconWrapperClass}>
-                        <Mail size={18} />
-                      </div>
-                      <input
-                        type="email"
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className={inputClass}
-                        placeholder="owner@restaurant.com"
-                      />
-                    </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">Email Address</label>
+                    <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className={inputClass} placeholder="your@email.com" />
                   </div>
 
                   {/* Password */}
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      <label className={labelClass}>Password</label>
-                      {isLogin && (
-                        <button
-                          type="button"
-                          onClick={() => setShowForgotPassword(true)}
-                          className="text-xs font-bold text-orange-500 hover:text-orange-600 dark:text-orange-400 dark:hover:text-orange-300 transition-colors"
-                        >
-                          Forgot Password?
-                        </button>
-                      )}
-                    </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">Password</label>
                     <div className="relative">
-                      <div className={iconWrapperClass}>
-                        <Lock size={18} />
-                      </div>
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        required
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className={inputClass.replace('pr-4', 'pr-12')}
-                        placeholder="••••••••"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                        tabIndex={-1}
-                      >
-                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      <input type={showPassword ? 'text' : 'password'} required value={password} onChange={e => setPassword(e.target.value)} className={inputClass + ' pr-10'} placeholder="••••••••" />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} tabIndex={-1} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer">
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
                   </div>
 
-                  {/* Remember Me Toggle */}
+                  {/* Remember + Forgot */}
                   {isLogin && (
-                    <div className="flex items-center gap-3 mt-1">
-                      <div
-                        role="presentation"
-                        onClick={() => setRememberMe(!rememberMe)}
-                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:ring-offset-2 dark:focus:ring-offset-slate-900 ${
-                          rememberMe
-                            ? 'bg-gradient-to-r from-orange-500 to-orange-600'
-                            : 'bg-gray-200 dark:bg-gray-700'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={rememberMe}
-                          onChange={() => {}}
-                          className="sr-only"
-                          title="Remember Email"
-                          aria-label="Remember Email"
-                        />
-                        <span
-                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                            rememberMe ? 'translate-x-5' : 'translate-x-0'
-                          }`}
-                        />
-                      </div>
-                      <label
-                        onClick={() => setRememberMe(!rememberMe)}
-                        className="text-sm font-semibold text-gray-600 dark:text-gray-400 cursor-pointer select-none transition-colors"
-                      >
-                        Remember Email
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center gap-2 cursor-pointer select-none" onClick={() => setRememberMe(!rememberMe)}>
+                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${rememberMe ? 'bg-orange-500 border-orange-500' : 'border-slate-300 dark:border-slate-600'}`}>
+                          {rememberMe && <CheckCircle2 size={12} className="text-white" strokeWidth={3} />}
+                        </div>
+                        <span className="text-sm text-slate-600 dark:text-slate-400">Remember me</span>
                       </label>
+                      <button type="button" onClick={() => setShowForgotPassword(true)} className="text-sm font-semibold text-orange-600 dark:text-orange-400 hover:underline cursor-pointer">
+                        Forgot password?
+                      </button>
                     </div>
                   )}
 
-                  {/* Submit Button */}
+                  {/* Submit */}
                   <button
                     type="submit"
-                    disabled={loading || (loginLockedUntil != null && lockCountdown > 0) || (signupBlocked && !isLogin)}
-                    className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-4 rounded-xl mt-3 transition-all duration-200 shadow-lg shadow-orange-500/20 dark:shadow-orange-500/10 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed hover:shadow-xl hover:shadow-orange-500/25 active:scale-[0.98]"
+                    disabled={loading}
+                    className="w-full py-3 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-500 hover:from-orange-600 hover:via-amber-600 hover:to-orange-600 text-white font-bold text-sm rounded-xl shadow-lg shadow-orange-500/25 flex items-center justify-center gap-2 disabled:opacity-60 active:scale-[0.98] cursor-pointer transition-all"
                   >
-                    {loading ? <Loader2 size={20} className="animate-spin" /> : (isLogin ? 'Sign In to Dashboard' : 'Create Free Account')}
-                    {!loading && <ArrowRight size={18} />}
+                    {loading ? (
+                      <Loader2 size={18} className="animate-spin" />
+                    ) : (
+                      <>
+                        <span>{isLogin ? 'Sign In to Dashboard' : 'Create Account'}</span>
+                        <ArrowRight size={16} />
+                      </>
+                    )}
                   </button>
                 </form>
               )}
 
-              {/* ── Toggle Login / Register ── */}
-              <div className="mt-6 text-center">
-                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium transition-colors">
+              {/* Switch mode */}
+              <div className="pt-2 text-center">
+                <p className="text-sm text-slate-500 dark:text-slate-400">
                   {isLogin ? "Don't have an account? " : "Already have an account? "}
                   <button
-                    onClick={() => {
-                      setIsLogin(!isLogin);
-                      setError('');
-                    }}
-                    className="text-orange-500 dark:text-orange-400 font-bold hover:text-orange-600 dark:hover:text-orange-300 transition-colors"
+                    type="button"
+                    onClick={() => { setIsLogin(!isLogin); setError(''); setShowForgotPassword(false); }}
+                    className="font-bold text-orange-600 dark:text-orange-400 hover:underline cursor-pointer"
                   >
-                    {isLogin ? 'Sign up now' : 'Sign in instead'}
+                    {isLogin ? 'Sign Up' : 'Sign In'}
                   </button>
                 </p>
               </div>
-            </>
-          )}
 
-          {/* Notice removed */}
+            </div>
+          )}
         </div>
 
-        {/* ── Subtle bottom branding ── */}
-        <p className="text-center text-xs text-gray-400 dark:text-gray-600 mt-6 font-medium transition-colors">
-          © {new Date().getFullYear()} Siya Bill · All rights reserved
+        {/* Footer below card */}
+        <p className="text-center text-xs text-slate-400 dark:text-slate-500 mt-4">
+          © {new Date().getFullYear()} Siya Bill POS · v{import.meta.env.VITE_APP_VERSION || '3.4.1'}
         </p>
-      </div>
 
-      {/* ── Forgot Password Modal Overlay ── */}
-      {/* (Modal functionality is inline above, but we keep this comment for parity) */}
+      </div>
     </div>
   );
 }
+

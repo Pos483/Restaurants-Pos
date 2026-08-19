@@ -4,7 +4,7 @@
   "author": "Siya Bill",
   "description": "Siya Bill - Professional Restaurant POS System",
   "private": true,
-  "version": "3.2.1",
+  "version": "3.4.1",
   "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
@@ -59,6 +59,7 @@
     "cross-env": "^7.0.3",
     "electron": "^30.0.0",
     "electron-builder": "^26.8.1",
+    "isomorphic-git": "^1.41.5",
     "jsdom": "^29.1.1",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
@@ -84,7 +85,8 @@
     "win": {
       "target": [
         "nsis"
-      ]
+      ],
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
@@ -93,7 +95,9 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Siya Bill",
-      "deleteAppDataOnUninstall": true
+      "deleteAppDataOnUninstall": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
     },
     "files": [
       "dist/**/*",

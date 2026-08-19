@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Utensils, Lock, ArrowRight, Loader2, Eye, EyeOff } from 'lucide-react';
+import { ArrowRight, Loader2, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../supabase';
 import { useToast } from './Toast';
 import { useApp } from '../contexts/AppContext';
@@ -61,20 +61,19 @@ export default function ResetPasswordScreen() {
     }
   };
 
-  const inputClass = `w-full pl-12 pr-12 py-3.5 rounded-xl font-medium transition-all duration-200
+  const inputClass = `w-full px-4 pr-12 py-3.5 rounded-xl font-medium transition-all duration-200
     bg-white/80 dark:bg-white/5 border border-gray-200 dark:border-white/10
     text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500
     focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 dark:focus:border-orange-400
     backdrop-blur-sm shadow-sm dark:shadow-none`;
 
   const labelClass = 'text-sm font-bold text-gray-700 dark:text-gray-300 transition-colors';
-  const iconWrapperClass = 'absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400 dark:text-gray-500';
 
   return (
-    <div className="relative flex items-center justify-center min-h-screen w-full overflow-y-auto font-sans transition-colors duration-300 bg-[#FAFBFC] dark:bg-[#0B0F19]">
+    <div className="relative flex items-center justify-center h-screen w-full overflow-y-auto p-4 font-sans transition-colors duration-300 bg-[#FAFBFC] dark:bg-[#0B0F19]">
       
       {/* ── Animated Gradient Background ── */}
-      <div className="absolute inset-0 overflow-hidden">
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 via-transparent to-indigo-500/10 dark:from-orange-500/5 dark:via-transparent dark:to-indigo-500/5" />
         {/* Animated floating orbs */}
         <div className="absolute top-[-20%] left-[-10%] w-[40rem] h-[40rem] rounded-full bg-orange-400/20 dark:bg-orange-500/10 blur-3xl animate-pulse [animation-duration:8s]" />
@@ -87,20 +86,25 @@ export default function ResetPasswordScreen() {
       </div>
 
       {/* ── Glass Card ── */}
-      <div className="relative z-10 w-full max-w-md mx-4">
+      <div className="relative z-10 w-full max-w-md mx-4 my-auto flex-shrink-0">
         <div className="bg-white/70 dark:bg-slate-900/60 backdrop-blur-2xl rounded-3xl border border-white/50 dark:border-white/10 shadow-2xl shadow-black/5 dark:shadow-black/30 p-5 sm:p-10 transition-all duration-300">
           
           {/* Brand Header */}
           <div className="flex flex-col items-center mb-8">
             <div className="relative mb-4">
               <div className="absolute inset-0 bg-gradient-to-br from-orange-500 to-indigo-500 rounded-2xl blur-lg opacity-40" />
-              <div className="relative bg-gradient-to-br from-orange-500 to-orange-600 w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-500/25">
-                <Utensils size={30} className="text-white" />
+              <div className="relative bg-white dark:bg-slate-900 border border-orange-200/50 dark:border-orange-800/50 w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-500/25 overflow-hidden p-1">
+                <img src="/icon.png" alt="Siya Bill Logo" className="w-full h-full object-contain rounded-xl" />
               </div>
             </div>
-            <h1 className="text-2xl font-black tracking-tight text-gray-900 dark:text-white transition-colors">
-              SIYA BILL
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-black tracking-tight text-gray-900 dark:text-white transition-colors">
+                SIYA BILL
+              </h1>
+              <span className="text-[10px] font-black tracking-tight px-2 py-0.5 rounded-md bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-900/50">
+                v{import.meta.env.VITE_APP_VERSION || '3.4.1'}
+              </span>
+            </div>
             <p className="text-xs font-semibold tracking-[0.2em] uppercase text-gray-400 dark:text-gray-500 mt-1 transition-colors">
               Set New Password
             </p>
@@ -127,9 +131,6 @@ export default function ResetPasswordScreen() {
             <div className="flex flex-col gap-2">
               <label className={labelClass}>New Password</label>
               <div className="relative">
-                <div className={iconWrapperClass}>
-                  <Lock size={18} />
-                </div>
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
@@ -153,9 +154,6 @@ export default function ResetPasswordScreen() {
             <div className="flex flex-col gap-2">
               <label className={labelClass}>Confirm Password</label>
               <div className="relative">
-                <div className={iconWrapperClass}>
-                  <Lock size={18} />
-                </div>
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
                   required
