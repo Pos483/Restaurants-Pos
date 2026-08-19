@@ -39,7 +39,7 @@ export default function QuickStockModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="bg-gradient-to-r from-orange-500 to-orange-600 p-5 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-white">नया stock item जोड़ें</h3>
+          <h3 className="text-lg font-bold text-white">Add New Stock Item</h3>
           <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl transition-colors" title="Close" aria-label="Close">
             <X size={18} className="text-white" />
           </button>

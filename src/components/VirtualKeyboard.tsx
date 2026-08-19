@@ -5,9 +5,10 @@ interface Props {
   onChange: (val: string) => void;
   layout?: 'default' | 'numeric';
   onTab?: () => void;
+  compact?: boolean;
 }
 
-export default function VirtualKeyboard({ value, onChange, layout = 'default', onTab }: Props) {
+export default function VirtualKeyboard({ value, onChange, layout = 'default', onTab, compact = false }: Props) {
   const [shift, setShift] = useState(false);
 
   const handleKeyClick = (key: string) => {
@@ -43,29 +44,29 @@ export default function VirtualKeyboard({ value, onChange, layout = 'default', o
   const rows = layout === 'numeric' ? numRows : textRows;
 
   return (
-    <div className="bg-gray-100 dark:bg-slate-800/80 p-2 sm:p-3 rounded-2xl w-full select-none shadow-inner dark:shadow-black/20">
+    <div className="bg-slate-100 dark:bg-slate-800/90 p-2 rounded-2xl w-full select-none shadow-inner border border-slate-200/80 dark:border-slate-700/60">
       {rows.map((row, i) => (
-        <div key={i} className={`flex justify-center gap-1 sm:gap-2 mb-1 sm:mb-2 ${layout === 'default' && i === 2 ? 'px-4 sm:px-8' : ''}`}>
+        <div key={i} className={`flex justify-center gap-1 sm:gap-1.5 mb-1 ${layout === 'default' && i === 2 ? 'px-3 sm:px-6' : ''}`}>
           {row.map((key) => {
             let label = key;
             let flex = 'flex-1';
-            let bg = 'bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-800 dark:text-slate-100';
+            let bg = 'bg-white dark:bg-slate-700 hover:bg-indigo-50 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100';
             
             if (key === '{bksp}') { 
               label = '⌫'; 
-              flex = layout === 'numeric' ? 'flex-1' : 'w-12 sm:w-16 flex-none';
-              bg = 'bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-red-600 dark:text-red-400';
+              flex = layout === 'numeric' ? 'flex-1' : 'w-10 sm:w-14 flex-none';
+              bg = 'bg-slate-200 dark:bg-slate-700 hover:bg-rose-100 text-rose-600 dark:text-rose-400';
             } else if (key === '{shift}') { 
               label = '⇧'; 
-              flex = 'w-12 sm:w-16 flex-none';
-              bg = shift ? 'bg-indigo-500 hover:bg-indigo-600 text-white' : 'bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-700 dark:text-slate-200';
+              flex = 'w-10 sm:w-14 flex-none';
+              bg = shift ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200';
             } else if (key === '{space}') { 
               label = 'Space'; 
-              flex = 'w-1/2 max-w-sm';
+              flex = 'w-1/2 max-w-xs';
             } else if (key === '{tab}') {
               label = 'Tab ↹';
-              flex = 'w-16 sm:w-24 flex-none';
-              bg = 'bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-700 dark:text-slate-200';
+              flex = 'w-14 sm:w-20 flex-none';
+              bg = 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200';
             }
 
             return (
@@ -73,7 +74,9 @@ export default function VirtualKeyboard({ value, onChange, layout = 'default', o
                 key={key}
                 type="button"
                 onClick={(e) => { e.preventDefault(); handleKeyClick(key); }}
-                className={`${flex} ${bg} active:scale-95 active:bg-gray-300 dark:active:bg-slate-800 transition-all font-black py-3 sm:py-4 rounded-xl shadow border border-gray-200/50 dark:border-slate-600/30 text-lg sm:text-xl flex items-center justify-center`}
+                className={`${flex} ${bg} active:scale-95 transition-all font-black ${
+                  compact ? 'py-1.5 sm:py-2 text-xs sm:text-sm' : 'py-2 sm:py-2.5 text-sm sm:text-base'
+                } rounded-xl shadow-xs border border-slate-200/60 dark:border-slate-600/40 flex items-center justify-center cursor-pointer`}
               >
                 {key.length === 1 && /[a-zA-Z]/.test(key) ? (shift ? label.toUpperCase() : label.toLowerCase()) : label}
               </button>

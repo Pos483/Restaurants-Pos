@@ -46,8 +46,11 @@ export {
   upsertPosCustomer,
   mergeDuplicateCustomers,
   recordCustomerCredit,
-  recordCustomerPayment
+  recordCustomerPayment,
+  searchCustomersUnified,
+  findCustomerByPhone
 } from './db/customers';
+export type { CustomerSearchResult } from './db/customers';
 
 // ── Print Queue Relay ─────────────────────────────────────────────────────────
 export {

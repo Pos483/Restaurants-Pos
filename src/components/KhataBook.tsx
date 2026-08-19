@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLiveQuery, db, recordCustomerPayment, normalizePhone, mergeDuplicateCustomers } from '../db';
-import { Search, UserPlus, IndianRupee, Printer, Clock, ArrowUpRight, ArrowDownLeft, User, Phone, ShieldAlert, CheckCircle2, XCircle } from 'lucide-react';
+import { UserPlus, IndianRupee, Printer, Clock, ArrowUpRight, ArrowDownLeft, User, Phone, ShieldAlert, CheckCircle2, XCircle } from 'lucide-react';
 import { useToast } from './Toast';
 import { ThermalPrinter } from '../printer';
 
@@ -222,14 +222,13 @@ export default function KhataBook() {
 
         {/* Search */}
         <div className="p-3.5 border-b border-gray-50 dark:border-slate-800 shrink-0">
-          <div className="relative">
-            <span className="absolute left-3 top-3.5 text-gray-400 dark:text-slate-500"><Search size={16} /></span>
+          <div>
             <input 
               type="text"
               placeholder="Search by name or phone..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-gray-50/60 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl text-xs font-bold focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20 text-gray-800 dark:text-slate-200"
+              className="w-full px-4 py-3 bg-gray-50/60 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl text-xs font-bold focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20 text-gray-800 dark:text-slate-200"
             />
           </div>
         </div>

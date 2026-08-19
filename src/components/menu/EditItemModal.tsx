@@ -127,7 +127,7 @@ export default function EditItemModal({
             <div className="bg-white/20 p-2 rounded-xl">
               <Save size={22} className="text-white" />
             </div>
-            <h3 className="text-xl font-bold text-white">Item Edit करें</h3>
+            <h3 className="text-xl font-bold text-white">Edit Menu Item</h3>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl transition-colors" title="Close" aria-label="Close">
             <X size={22} className="text-white" />

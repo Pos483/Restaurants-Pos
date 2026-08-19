@@ -110,6 +110,13 @@ localDb.version(6).stores({
   self_orders: 'id, tableId, status'
 });
 
+localDb.version(7).stores({
+  staff: 'id, name, role, phone, status',
+  staff_attendance: 'id, staffId, date, status',
+  staff_advances: 'id, staffId, date, type'
+});
+
+
 
 
 import { useLiveQuery as dexieUseLiveQuery } from 'dexie-react-hooks';

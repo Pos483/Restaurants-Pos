@@ -295,7 +295,7 @@ export default function ExpensesTab({ rangeExpenses }: ExpensesTabProps) {
                 onClick={() => setExpenseRows([...expenseRows, { amount: '', paymentMethod: 'Cash', note: '' }])}
                 className="py-2 px-3 self-start border border-dashed border-purple-300 dark:border-purple-900/60 hover:bg-purple-50/50 dark:hover:bg-purple-950/10 text-purple-600 dark:text-purple-400 rounded-2xl text-xs font-black flex items-center gap-1.5 transition-all active:scale-95"
               >
-                <Plus size={14} /> Add Row (और खर्च जोड़ें)
+                <Plus size={14} /> Add Another Row
               </button>
 
               {/* Footer Buttons */}
@@ -314,7 +314,7 @@ export default function ExpensesTab({ rangeExpenses }: ExpensesTabProps) {
                   type="submit"
                   className="flex-1 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-2xl font-black text-xs shadow-md shadow-purple-100 dark:shadow-none cursor-pointer active:scale-95"
                 >
-                  Save All Expenses (सुरक्षित करें)
+                  Save All Expenses
                 </button>
               </div>
             </form>

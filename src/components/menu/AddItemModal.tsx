@@ -124,7 +124,7 @@ export default function AddItemModal({
             <div className="bg-white/20 p-2 rounded-xl">
               <Plus size={22} className="text-white" />
             </div>
-            <h3 className="text-xl font-bold text-white">Menu Item Add करें</h3>
+            <h3 className="text-xl font-bold text-white">Add New Menu Item</h3>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl transition-colors" title="Close" aria-label="Close">
             <X size={22} className="text-white" />
@@ -371,7 +371,7 @@ export default function AddItemModal({
                 🍹 Bar Printer
               </button>
             </div>
-            <p className="text-xs text-teal-600 dark:text-teal-400 mt-2 opacity-70">Multiple Printer mode me is item ka KOT kahan jayega</p>
+            <p className="text-xs text-teal-600 dark:text-teal-400 mt-2 opacity-70">Target printer for KOT routing in Multiple Printer mode</p>
           </div>
         </div>
 

@@ -1,4 +1,4 @@
-const { app, protocol, net, BrowserWindow, dialog, ipcMain, nativeTheme } = require('electron');
+const { app, protocol, net, BrowserWindow, dialog, ipcMain, nativeTheme, shell, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -89,14 +89,19 @@ function createWindow() {
     width: windowState.width || 1200,
     height: windowState.height || 800,
     show: false, // Hide window initially to prevent blank white screen
+    autoHideMenuBar: true,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0B0F19' : '#FAFBFC',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
     },
-    icon: path.join(__dirname, '../build/icon.png')
+    icon: fs.existsSync(path.join(__dirname, '../build/icon.ico'))
+      ? path.join(__dirname, '../build/icon.ico')
+      : path.join(__dirname, '../build/icon.png')
   });
+
+  mainWindow.removeMenu();
 
   mainWindow.once('ready-to-show', () => {
     if (windowState.isMaximized) {
@@ -132,12 +137,34 @@ function createWindow() {
   // Check if we are in development mode
   const isDev = !app.isPackaged;
 
-    if (isDev) {
-      mainWindow.loadURL('http://localhost:5173');
-      mainWindow.webContents.openDevTools();
-    } else {
-      mainWindow.loadURL('app://localhost');
+  // Handle external links (WhatsApp wa.me, http/https, etc.) to open in system default browser
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url && (url.startsWith('http:') || url.startsWith('https:') || url.startsWith('mailto:') || url.startsWith('tel:'))) {
+      shell.openExternal(url);
+      return { action: 'deny' };
     }
+    return { action: 'allow' };
+  });
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (isDev && (url.startsWith('http://localhost:5173') || url.startsWith('http://127.0.0.1:5173'))) {
+      return;
+    }
+    if (url.startsWith('app://') || url === 'about:blank') {
+      return;
+    }
+    if (url.startsWith('http:') || url.startsWith('https:') || url.startsWith('mailto:') || url.startsWith('tel:')) {
+      event.preventDefault();
+      shell.openExternal(url);
+    }
+  });
+
+  if (isDev) {
+    mainWindow.loadURL('http://localhost:5173');
+    mainWindow.webContents.openDevTools();
+  } else {
+    mainWindow.loadURL('app://localhost');
+  }
 
     // Auto-select serial port for thermal printer or ask user if multiple
     mainWindow.webContents.session.on('select-serial-port', (event, portList, webContents, callback) => {
@@ -216,6 +243,7 @@ app.whenReady().then(() => {
     }
   });
 
+  Menu.setApplicationMenu(null);
   createWindow();
 
 
@@ -229,6 +257,40 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
+    }
+  });
+});
+
+// IPC for opening external URLs safely in user's default browser
+ipcMain.handle('open-external', async (event, url) => {
+  if (url && (url.startsWith('http:') || url.startsWith('https:') || url.startsWith('mailto:') || url.startsWith('tel:'))) {
+    await shell.openExternal(url);
+    return true;
+  }
+  return false;
+});
+
+// App-level handler for any newly created web contents / popups
+app.on('web-contents-created', (event, contents) => {
+  contents.setWindowOpenHandler(({ url }) => {
+    if (url && (url.startsWith('http:') || url.startsWith('https:') || url.startsWith('mailto:') || url.startsWith('tel:'))) {
+      shell.openExternal(url);
+      return { action: 'deny' };
+    }
+    return { action: 'allow' };
+  });
+
+  contents.on('will-navigate', (navEvent, navigationUrl) => {
+    const isDev = !app.isPackaged;
+    if (isDev && (navigationUrl.startsWith('http://localhost:5173') || navigationUrl.startsWith('http://127.0.0.1:5173'))) {
+      return;
+    }
+    if (navigationUrl.startsWith('app://') || navigationUrl === 'about:blank') {
+      return;
+    }
+    if (navigationUrl.startsWith('http:') || navigationUrl.startsWith('https:') || navigationUrl.startsWith('mailto:') || navigationUrl.startsWith('tel:')) {
+      navEvent.preventDefault();
+      shell.openExternal(navigationUrl);
     }
   });
 });

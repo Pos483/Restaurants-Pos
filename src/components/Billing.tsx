@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useLiveQuery, db, localDb, deductStockForBill, recordCustomerCredit, DBCustomer, normalizePhone, getNextBillNumber } from '../db';
+import { useLiveQuery, db, deductStockForBill, recordCustomerCredit, normalizePhone, getNextBillNumber, searchCustomersUnified, findCustomerByPhone, CustomerSearchResult } from '../db';
 import { Table } from '../types';
 import { Printer, Banknote, CreditCard, Smartphone, Clock, UserPlus, Tag, AlertCircle } from 'lucide-react';
 import { ThermalPrinter } from '../printer';
@@ -24,7 +24,7 @@ export default function Billing({ tables, onSettleBill }: Props) {
   const [showDiscount, setShowDiscount] = useState<boolean>(false);
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
   const [activeCustomerField, setActiveCustomerField] = useState<'name' | 'phone'>('name');
-  const [customerSuggestions, setCustomerSuggestions] = useState<DBCustomer[]>([]);
+  const [customerSuggestions, setCustomerSuggestions] = useState<CustomerSearchResult[]>([]);
 
   useEffect(() => {
     if (!showCustomer) {
@@ -33,26 +33,8 @@ export default function Billing({ tables, onSettleBill }: Props) {
     }
     const fetchSuggestions = async () => {
       try {
-        const query = activeCustomerField === 'name' ? customerName.trim().toLowerCase() : customerPhone.trim();
-        if (!query) {
-          const list = await localDb.table<DBCustomer>('customers').orderBy('timestamp').reverse().limit(5).toArray();
-          setCustomerSuggestions(list);
-          return;
-        }
-
-        let list: DBCustomer[] = [];
-        const customersTable = localDb.table<DBCustomer>('customers');
-        if (activeCustomerField === 'name') {
-          list = await customersTable
-            .filter(c => c.name.toLowerCase().includes(query))
-            .limit(5)
-            .toArray();
-        } else {
-          list = await customersTable
-            .filter(c => c.phone.includes(query))
-            .limit(5)
-            .toArray();
-        }
+        const query = activeCustomerField === 'name' ? customerName : customerPhone;
+        const list = await searchCustomersUnified(query, 6);
         setCustomerSuggestions(list);
       } catch (err) {
         console.error('Error fetching customer suggestions:', err);
@@ -66,8 +48,8 @@ export default function Billing({ tables, onSettleBill }: Props) {
     const autofill = async () => {
       const clean = normalizePhone(customerPhone);
       if (clean.length === 10) {
-        const match = await db.customers.where('phone').equals(clean).first();
-        if (match) {
+        const match = await findCustomerByPhone(clean);
+        if (match && match.name) {
           setCustomerName(match.name);
         }
       }

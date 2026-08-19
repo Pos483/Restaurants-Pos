@@ -645,7 +645,7 @@ export default function Reports() {
               <div>
                 <h4 className="text-xs font-black text-purple-950 dark:text-purple-300">Staff Holiday Planning Guidance</h4>
                 <p className="text-xs text-purple-800 dark:text-purple-400 font-semibold mt-0.5">
-                  यह ग्राफ चुनी गई अवधि में सभी हफ्तों के डेटा को मिलाकर दिखाता है। <strong>"Best for Holiday"</strong> टैग वाले दिन सेल्स और ग्राहकों की संख्या सबसे कम रहती है, जो स्टाफ की छुट्टी के लिए सबसे सही दिन है।
+                  This graph aggregates data across all weeks in the selected date range. The day tagged <strong>"Best for Holiday"</strong> experiences the lowest sales and customer traffic, making it the ideal day for staff weekly off.
                 </p>
               </div>
             </div>

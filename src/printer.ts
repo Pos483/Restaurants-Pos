@@ -167,19 +167,19 @@ export class ThermalPrinter {
     const name = err.name || '';
     
     if (name === 'SecurityError' || msg.includes('Access denied') || msg.includes('locked')) {
-      return 'Printer Port (COM) lock ho gaya hai. Kripya check karein ki koi aur software (jaise dusra driver ya utility) is COM port ko connect to nahi kiya hai.';
+      return 'Printer Port (COM) is locked. Please ensure no other software or driver is using this COM port.';
     }
     if (name === 'NetworkError' || msg.includes('device disconnected') || msg.includes('Failed to open')) {
-      return 'Printer connection drop ho gaya hai. Kripya printer switch on karein aur check karein ki serial cable securely plugged hai.';
+      return 'Printer connection dropped. Please ensure the printer is turned on and the cable is securely connected.';
     }
     if (name === 'InvalidStateError' || msg.includes('already open')) {
-      return 'Printer port system me open/connected state me hai.';
+      return 'Printer port is already in open/connected state.';
     }
     if (name === 'NotFoundError' || msg.includes('No port selected')) {
-      return 'Printer connect karne ke liye koi valid serial port select nahi kiya gaya.';
+      return 'No valid serial port was selected for printer connection.';
     }
     if (msg.includes('bluetooth') || msg.includes('GATT') || msg.includes('characteristic')) {
-      return 'Bluetooth connection setup fail ho gaya hai. Kripya verification settings check karein aur range verify karein.';
+      return 'Bluetooth connection setup failed. Please check your Bluetooth settings and device range.';
     }
     return `Printer Error: ${msg}`;
   }

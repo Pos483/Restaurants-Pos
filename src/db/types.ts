@@ -186,3 +186,39 @@ export interface DBSelfOrder extends BaseDBRecord {
   timestamp: number;
 }
 
+export interface DBStaff extends BaseDBRecord {
+  id: string;
+  name: string;
+  role: 'chef' | 'waiter' | 'manager' | 'cashier' | 'cleaner' | 'helper' | 'other';
+  phone: string;
+  salary: number;
+  salaryType: 'monthly' | 'daily';
+  allowedLeaves?: number; // Allowed Paid Leaves per month (e.g. 4 for 4 Sundays/Offs)
+  status: 'active' | 'inactive';
+  joiningDate?: string;
+  timestamp: number;
+}
+
+export interface DBStaffAttendance extends BaseDBRecord {
+  id: string;
+  staffId: string;
+  date: string; // YYYY-MM-DD
+  status: 'present' | 'absent' | 'half_day' | 'leave';
+  checkInTime?: string;
+  checkOutTime?: string;
+  note?: string;
+  timestamp: number;
+}
+
+export interface DBStaffAdvance extends BaseDBRecord {
+  id: string;
+  staffId: string;
+  amount: number;
+  date: string; // YYYY-MM-DD
+  type: 'advance' | 'salary_payout';
+  paymentMethod: 'cash' | 'upi' | 'bank_transfer' | 'other';
+  note?: string;
+  timestamp: number;
+}
+
+

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  LayoutGrid, Utensils, BookOpen, HelpCircle, Crown, Sun, Moon,
+  LayoutGrid, BookOpen, HelpCircle, Crown, Sun, Moon,
   Zap, LayoutDashboard, BarChart3, Printer, Package, ChefHat, Eye,
   Settings, Store, User as UserIcon, LogOut, CheckCircle2, XCircle,
-  Unplug, AlertTriangle, Megaphone, Users, Bell
+  Unplug, AlertTriangle, Megaphone, Users, Bell, UserCheck
 } from 'lucide-react';
 import { db, useLiveQuery, notifyGlobalChange, getNextKotNumber } from '../db';
 // ThermalPrinter loaded dynamically on button click to keep printer.ts out of initial bundle
@@ -157,41 +157,40 @@ export function AppLayout({
     <div className="flex h-screen bg-[#FAFBFC] dark:bg-[#0B0F19] font-sans text-gray-900 dark:text-slate-100 overflow-hidden transition-colors duration-300">
       {/* Desktop Sidebar */}
       <div className="hidden md:flex w-[88px] glass-sidebar flex-col items-center py-4 z-10 transition-colors duration-300">
-        <div className="bg-gradient-to-br from-orange-400 to-orange-600 p-2.5 rounded-xl text-white mb-4 shadow-lg shadow-orange-200/50 dark:shadow-orange-900/30 shrink-0 glow-orange">
-          <Utensils size={18} />
+        <div className="w-10 h-10 rounded-xl overflow-hidden mb-3 shadow-lg shadow-orange-200/50 dark:shadow-orange-900/30 shrink-0 border border-orange-200/40 dark:border-orange-800/40 bg-white dark:bg-slate-900 flex items-center justify-center p-0.5">
+          <img src="/icon.png" alt="Siya Bill" className="w-full h-full object-contain rounded-lg" />
         </div>
-        <nav className="flex flex-col gap-1 w-full px-2 overflow-y-auto scrollbar-hide pb-4">
+        <nav className="flex flex-col gap-1 w-full px-2 overflow-y-auto scrollbar-hide pb-2">
           {isAppLocked ? (
-            <NavItem icon={<Crown size={16} className="text-red-500 animate-pulse" />} label="Premium" active={activeTab === 'subscription'} onClick={() => setActiveTab('subscription')} />
+            <NavItem icon={<Crown size={14} className="text-red-500 animate-pulse" />} label="Premium" active={activeTab === 'subscription'} onClick={() => setActiveTab('subscription')} />
           ) : (
             <>
-              <NavItem icon={<LayoutDashboard size={16} />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
-              <NavItem icon={<LayoutGrid size={16} />} label="Dine-In" active={activeTab === 'tables'} onClick={() => setActiveTab('tables')} />
-
-              <NavItem icon={<Zap size={16} />} label="Quick" active={activeTab === 'quick'} onClick={() => setActiveTab('quick')} />
-              <NavItem icon={<ChefHat size={16} />} label="Kitchen" active={activeTab === 'kot'} onClick={() => setActiveTab('kot')} />
-              <NavItem icon={<BarChart3 size={16} />} label="Reports" active={activeTab === 'reports'} onClick={() => setActiveTab('reports')} />
-              <NavItem icon={<Users size={16} />} label="Khata" active={activeTab === 'khata'} onClick={() => setActiveTab('khata')} />
-              <NavItem icon={<UserIcon size={16} />} label="Customers" active={activeTab === 'customers'} onClick={() => setActiveTab('customers')} />
+              <NavItem icon={<LayoutDashboard size={14} />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
+              <NavItem icon={<LayoutGrid size={14} />} label="Dine-In" active={activeTab === 'tables'} onClick={() => setActiveTab('tables')} />
+              <NavItem icon={<Zap size={14} />} label="Quick" active={activeTab === 'quick'} onClick={() => setActiveTab('quick')} />
+              <NavItem icon={<ChefHat size={14} />} label="Kitchen" active={activeTab === 'kot'} onClick={() => setActiveTab('kot')} />
+              <NavItem icon={<BookOpen size={14} />} label="Menu" active={activeTab === 'menu'} onClick={() => setActiveTab('menu')} />
               <NavItem
                 icon={
                   <div className="relative">
-                    <Package size={16} />
+                    <Package size={14} />
                     {hasLowStock && (
-                      <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                      <span className="absolute -top-1 -right-1 flex h-2 w-2">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
                       </span>
                     )}
                   </div>
                 }
                 label="Stock" active={activeTab === 'stock'} onClick={() => setActiveTab('stock')}
               />
-              <NavItem icon={<Store size={16} />} label="Profile" active={activeTab === 'profile'} onClick={() => setActiveTab('profile')} />
-              <NavItem icon={<Settings size={16} />} label="Settings" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
-              <NavItem icon={<BookOpen size={16} />} label="Menu" active={activeTab === 'menu'} onClick={() => setActiveTab('menu')} />
-              <NavItem icon={<HelpCircle size={16} />} label="Help" active={activeTab === 'help'} onClick={() => setActiveTab('help')} />
-              <NavItem icon={<Crown size={16} className="text-amber-500" />} label="Premium" active={activeTab === 'subscription'} onClick={() => setActiveTab('subscription')} />
+              <NavItem icon={<BarChart3 size={14} />} label="Reports" active={activeTab === 'reports'} onClick={() => setActiveTab('reports')} />
+              <NavItem icon={<Users size={14} />} label="Khata" active={activeTab === 'khata'} onClick={() => setActiveTab('khata')} />
+              <NavItem icon={<UserIcon size={14} />} label="Customers" active={activeTab === 'customers'} onClick={() => setActiveTab('customers')} />
+              <NavItem icon={<UserCheck size={14} />} label="Staff" active={activeTab === 'staff'} onClick={() => setActiveTab('staff')} />
+              <NavItem icon={<Settings size={14} />} label="Settings" active={activeTab === 'settings' || activeTab === 'profile'} onClick={() => setActiveTab('settings')} />
+              <NavItem icon={<HelpCircle size={14} />} label="Help" active={activeTab === 'help'} onClick={() => setActiveTab('help')} />
+              <NavItem icon={<Crown size={14} className="text-amber-500" />} label="Premium" active={activeTab === 'subscription'} onClick={() => setActiveTab('subscription')} />
             </>
           )}
         </nav>
@@ -225,7 +224,7 @@ export function AppLayout({
         )}
 
         {/* Header */}
-        <header className="glass-header px-4 md:px-8 py-2.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0 z-10 transition-colors duration-300">
+        <header className="glass-header px-4 md:px-8 py-2.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0 relative z-50 transition-colors duration-300">
           <div className="min-w-0 flex-1">
             <h1 className="text-lg md:text-xl font-black text-gray-800 dark:text-slate-100 tracking-tight transition-colors truncate max-w-[240px] sm:max-w-[450px] lg:max-w-[600px]">
               {restaurantName.toUpperCase()}
@@ -296,8 +295,6 @@ export function AppLayout({
               <Printer size={14} /><span className="hidden md:inline">Connect Printer</span>
             </button>
 
-
-
             {/* Self-Orders Notification Bell */}
             <button
               onClick={() => setShowPendingOrdersModal(true)}
@@ -315,28 +312,61 @@ export function AppLayout({
               )}
             </button>
 
+            {/* Help & Support Header Shortcut */}
+            <button
+              onClick={() => setActiveTab('help')}
+              className={`p-2 rounded-xl transition-all duration-300 border shadow-sm cursor-pointer ${
+                activeTab === 'help'
+                  ? 'bg-orange-500 text-white border-orange-500 shadow-orange-500/20 scale-105'
+                  : 'bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-600 dark:text-slate-300 hover:text-orange-500 dark:hover:text-orange-400 border-gray-200/50 dark:border-slate-700/50'
+              }`}
+              title="Help & Support"
+            >
+              <HelpCircle size={16} />
+            </button>
+
+            {/* Settings Header Shortcut */}
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`p-2 rounded-xl transition-all duration-300 border shadow-sm cursor-pointer ${
+                activeTab === 'settings'
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-600/20 scale-105'
+                  : 'bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-600 dark:text-slate-300 hover:text-indigo-500 dark:hover:text-indigo-400 border-gray-200/50 dark:border-slate-700/50'
+              }`}
+              title="System Settings"
+            >
+              <Settings size={16} />
+            </button>
+
             {/* Theme Toggle */}
-            <button onClick={toggleTheme} className="p-2 rounded-xl bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 transition-all duration-300 text-gray-600 dark:text-slate-300 hover:text-orange-500 dark:hover:text-orange-400 border border-gray-200/50 dark:border-slate-700/50 shadow-sm" title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
+            <button onClick={toggleTheme} className="p-2 rounded-xl bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 transition-all duration-300 text-gray-600 dark:text-slate-300 hover:text-orange-500 dark:hover:text-orange-400 border border-gray-200/50 dark:border-slate-700/50 shadow-sm cursor-pointer" title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
               {isDark ? <Sun size={16} /> : <Moon size={16} />}
             </button>
 
             {/* Profile Dropdown */}
-            <div className="relative" ref={profileMenuRef}>
+            <div className="relative z-50" ref={profileMenuRef}>
               <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-950/50 flex items-center justify-center border border-indigo-200 dark:border-indigo-800/60 cursor-pointer hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors shadow-sm" title={user?.email || 'User'} onClick={() => setShowProfileMenu(!showProfileMenu)}>
                 <span className="font-bold text-indigo-700 dark:text-indigo-300 text-sm">{user?.email ? user.email.charAt(0).toUpperCase() : 'U'}</span>
               </div>
               {showProfileMenu && (
-                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-[#0f172a] rounded-2xl shadow-xl border border-gray-100 dark:border-slate-800 overflow-hidden z-50 transition-colors">
-                  <div className="px-4 py-3 border-b border-gray-50 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/40">
-                    <p className="text-xs text-gray-500 dark:text-slate-400 font-bold uppercase tracking-wider">Signed in as</p>
-                    <p className="text-sm font-bold text-gray-800 dark:text-slate-100 truncate mt-0.5">{user?.email}</p>
+                <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-[#0f172a] rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-800 overflow-hidden z-[100] transition-colors animate-in fade-in zoom-in-95 duration-150">
+                  <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-800 bg-gray-50/80 dark:bg-slate-800/40">
+                    <p className="text-[10px] text-gray-400 dark:text-slate-400 font-black uppercase tracking-wider">Signed in as</p>
+                    <p className="text-xs font-bold text-gray-800 dark:text-slate-100 truncate mt-0.5">{user?.email}</p>
                   </div>
-                  <div className="p-2">
-                    <button onClick={() => { setActiveTab('profile'); setShowProfileMenu(false); }} className="w-full text-left px-3 py-2 text-sm font-bold text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl transition-colors flex items-center gap-2">
-                      <UserIcon size={16} /> Restaurant Profile
+                  <div className="p-1.5 space-y-0.5">
+                    <button onClick={() => { setActiveTab('settings'); setShowProfileMenu(false); }} className="w-full text-left px-3 py-2 text-xs font-bold text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl transition-colors flex items-center gap-2 cursor-pointer">
+                      <Settings size={14} className="text-indigo-500" /> Settings & Profile
                     </button>
-                    <button onClick={handleLogout} className="w-full text-left px-3 py-2 text-sm font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-colors flex items-center gap-2 mt-1">
-                      <LogOut size={16} /> Log out
+                    <button onClick={() => { setActiveTab('subscription'); setShowProfileMenu(false); }} className="w-full text-left px-3 py-2 text-xs font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20 rounded-xl transition-colors flex items-center gap-2 cursor-pointer">
+                      <Crown size={14} className="text-amber-500" /> Premium Plan
+                    </button>
+                    <button onClick={() => { setActiveTab('help'); setShowProfileMenu(false); }} className="w-full text-left px-3 py-2 text-xs font-bold text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl transition-colors flex items-center gap-2 cursor-pointer">
+                      <HelpCircle size={14} className="text-orange-500" /> Help &amp; Support
+                    </button>
+                    <div className="my-1 border-t border-gray-100 dark:border-slate-800" />
+                    <button onClick={handleLogout} className="w-full text-left px-3 py-2 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-colors flex items-center gap-2 cursor-pointer">
+                      <LogOut size={14} /> Log out
                     </button>
                   </div>
                 </div>
@@ -406,14 +436,15 @@ export function AppLayout({
                 <MobileMenuButton icon={<BarChart3 size={20} />} label="Reports" active={activeTab === 'reports'} onClick={() => { setActiveTab('reports'); setShowMobileMenu(false); }} />
                 <MobileMenuButton icon={<Users size={20} />} label="Khata" active={activeTab === 'khata'} onClick={() => { setActiveTab('khata'); setShowMobileMenu(false); }} />
                 <MobileMenuButton icon={<UserIcon size={20} />} label="Customers" active={activeTab === 'customers'} onClick={() => { setActiveTab('customers'); setShowMobileMenu(false); }} />
+                <MobileMenuButton icon={<UserCheck size={20} />} label="Staff" active={activeTab === 'staff'} onClick={() => { setActiveTab('staff'); setShowMobileMenu(false); }} />
                 <MobileMenuButton icon={<BookOpen size={20} />} label="Menu" active={activeTab === 'menu'} onClick={() => { setActiveTab('menu'); setShowMobileMenu(false); }} />
                 <MobileMenuButton
                   icon={<div className="relative"><Package size={20} />{hasLowStock && (<span className="absolute -top-1 -right-1 flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" /></span>)}</div>}
                   label="Stock" active={activeTab === 'stock'} onClick={() => { setActiveTab('stock'); setShowMobileMenu(false); }}
                 />
-                <MobileMenuButton icon={<Settings size={20} />} label="Settings" active={activeTab === 'settings'} onClick={() => { setActiveTab('settings'); setShowMobileMenu(false); }} />
-                <MobileMenuButton icon={<Store size={20} />} label="Profile" active={activeTab === 'profile'} onClick={() => { setActiveTab('profile'); setShowMobileMenu(false); }} />
+                <MobileMenuButton icon={<Settings size={20} />} label="Settings" active={activeTab === 'settings' || activeTab === 'profile'} onClick={() => { setActiveTab('settings'); setShowMobileMenu(false); }} />
                 <MobileMenuButton icon={<HelpCircle size={20} />} label="Help" active={activeTab === 'help'} onClick={() => { setActiveTab('help'); setShowMobileMenu(false); }} />
+                <MobileMenuButton icon={<Crown size={20} className="text-amber-500" />} label="Premium" active={activeTab === 'subscription'} onClick={() => { setActiveTab('subscription'); setShowMobileMenu(false); }} />
               </div>
             </div>
           </div>
@@ -524,7 +555,7 @@ function NavItem({ icon, label, active, onClick, disabled = false }: { icon: Rea
     >
       {active && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-gradient-to-b from-orange-500 to-orange-600 shadow-sm shadow-orange-500/30" />}
       <div className={`transition-all duration-300 ${active ? 'scale-110 -translate-y-0.5' : 'group-hover:scale-110 group-hover:-translate-y-0.5'}`}>{icon}</div>
-      <span className={`text-[10px] mt-1 font-bold uppercase tracking-wider transition-all duration-300 ${active ? 'opacity-100' : 'opacity-70 group-hover:opacity-100'}`}>{label}</span>
+      <span className={`text-[9px] mt-1 font-bold uppercase tracking-wider transition-all duration-300 ${active ? 'opacity-100' : 'opacity-70 group-hover:opacity-100'}`}>{label}</span>
     </div>
   );
 }

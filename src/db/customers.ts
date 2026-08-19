@@ -8,6 +8,17 @@ export const normalizePhone = (phone: string): string => {
   return digits.length > 10 ? digits.slice(-10) : digits;
 };
 
+export interface CustomerSearchResult {
+  id: string;
+  name: string;
+  phone: string;
+  visitCount?: number;
+  totalSpent?: number;
+  balance?: number;
+  tags?: string[];
+  lastVisit?: number;
+}
+
 export const getPosCustomerByPhone = async (phone: string): Promise<DBPosCustomer | null> => {
   if (!phone) return null;
   const clean = normalizePhone(phone);
@@ -18,6 +29,93 @@ export const getPosCustomerByPhone = async (phone: string): Promise<DBPosCustome
   } catch {
     return null;
   }
+};
+
+export const findCustomerByPhone = async (phone: string): Promise<{ name: string; phone: string; balance?: number } | null> => {
+  if (!phone) return null;
+  const clean = normalizePhone(phone);
+  if (!clean) return null;
+  try {
+    const pos = await getPosCustomerByPhone(clean);
+    if (pos && pos.name) {
+      return { name: pos.name, phone: pos.phone };
+    }
+    const khata = await db.customers.where('phone').equals(clean).first();
+    if (khata && khata.name) {
+      return { name: khata.name, phone: khata.phone, balance: khata.balance };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+export const searchCustomersUnified = async (query: string = '', limit: number = 8): Promise<CustomerSearchResult[]> => {
+  const q = (query || '').trim().toLowerCase();
+  const resultMap = new Map<string, CustomerSearchResult>();
+
+  try {
+    // 1. Fetch from posCustomers
+    const allPos = await db.posCustomers.toArray();
+    let posList = allPos;
+    if (q) {
+      posList = allPos.filter(c => 
+        (c.name && c.name.toLowerCase().includes(q)) || 
+        (c.phone && c.phone.includes(q)) || 
+        (c.email && c.email.toLowerCase().includes(q))
+      );
+    } else {
+      posList = [...allPos].sort((a, b) => (b.lastVisit || 0) - (a.lastVisit || 0));
+    }
+
+    for (const c of posList) {
+      const clean = normalizePhone(c.phone) || c.phone;
+      if (clean) {
+        resultMap.set(clean, {
+          id: c.id,
+          name: c.name,
+          phone: c.phone,
+          visitCount: c.visitCount || 0,
+          totalSpent: c.totalSpent || 0,
+          tags: c.tags,
+          lastVisit: c.lastVisit,
+        });
+      }
+    }
+
+    // 2. Fetch from KhataBook customers
+    const allKhata = await db.customers.toArray();
+    let khataList = allKhata;
+    if (q) {
+      khataList = allKhata.filter(c => 
+        (c.name && c.name.toLowerCase().includes(q)) || 
+        (c.phone && c.phone.includes(q))
+      );
+    } else {
+      khataList = [...allKhata].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    }
+
+    for (const k of khataList) {
+      const clean = normalizePhone(k.phone) || k.phone;
+      if (clean) {
+        const existing = resultMap.get(clean);
+        if (existing) {
+          existing.balance = k.balance;
+        } else {
+          resultMap.set(clean, {
+            id: k.id,
+            name: k.name,
+            phone: k.phone,
+            balance: k.balance,
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Error in searchCustomersUnified:', err);
+  }
+
+  return Array.from(resultMap.values()).slice(0, limit);
 };
 
 export const upsertPosCustomer = async (name: string, phone: string, billTotal: number = 0): Promise<void> => {

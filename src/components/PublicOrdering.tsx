@@ -690,15 +690,14 @@ export default function PublicOrdering({ restaurantCode, tableId, isOnline }: Pr
         {/* TAB 2: SEARCH VIEW */}
         {activeMobileTab === 'search' && (
           <div className="flex-1 flex flex-col overflow-hidden px-3 pt-3 gap-3 animate-fade-in">
-            <div className="relative shrink-0">
-              <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <div className="shrink-0">
               <input
                 ref={searchInputRef}
                 type="search"
                 placeholder="Search dishes..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-11 pr-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-medium text-gray-800 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 placeholder:text-gray-400 shadow-sm transition-all"
+                className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm font-medium text-gray-800 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 placeholder:text-gray-400 shadow-sm transition-all"
               />
             </div>
 

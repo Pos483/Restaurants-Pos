@@ -39,7 +39,7 @@ export const pullTable = async (tableName: string, userId: string) => {
     const tableMapping = getTable(tableName);
     if (!tableMapping || tableMapping.onlineOnly) return;
 
-    const largeTables = ['bills', 'stock_transactions', 'customer_transactions', 'expenses', 'kds_orders'];
+    const largeTables = ['bills', 'stock_transactions', 'customer_transactions', 'expenses', 'kds_orders', 'staff_attendance', 'staff_advances'];
     const isLargeTable = largeTables.includes(tableName);
 
     const dexieTable = localDb.table(tableName);

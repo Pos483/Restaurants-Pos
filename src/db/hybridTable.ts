@@ -16,7 +16,10 @@ import {
   DBCustomerTransaction,
   DBPosCustomer,
   DBExpense,
-  DBSelfOrder
+  DBSelfOrder,
+  DBStaff,
+  DBStaffAttendance,
+  DBStaffAdvance
 } from './types';
 
 export class HybridTable<T extends BaseDBRecord> {
@@ -712,6 +715,24 @@ const posCustomersTable = new HybridTable<DBPosCustomer>(
   })
 );
 
+const staffTable = new HybridTable<DBStaff>(
+  'staff',
+  (s, uid) => ({ app_user_id: uid, id: s.id, name: s.name, role: s.role, phone: s.phone, salary: s.salary, salary_type: s.salaryType, allowed_leaves: s.allowedLeaves ?? 4, status: s.status, joining_date: s.joiningDate || null, timestamp: s.timestamp, updated_at: new Date().toISOString() }),
+  (r) => ({ id: r.id, name: r.name, role: r.role, phone: r.phone, salary: Number(r.salary || 0), salaryType: r.salary_type || 'monthly', allowedLeaves: Number(r.allowed_leaves ?? 4), status: r.status || 'active', joiningDate: r.joining_date || undefined, timestamp: Number(r.timestamp) })
+);
+
+const staffAttendanceTable = new HybridTable<DBStaffAttendance>(
+  'staff_attendance',
+  (a, uid) => ({ app_user_id: uid, id: a.id, staff_id: a.staffId, date: a.date, status: a.status, check_in_time: a.checkInTime || null, check_out_time: a.checkOutTime || null, note: a.note || null, timestamp: a.timestamp, updated_at: new Date().toISOString() }),
+  (r) => ({ id: r.id, staffId: r.staff_id, date: r.date, status: r.status, checkInTime: r.check_in_time || undefined, checkOutTime: r.check_out_time || undefined, note: r.note || undefined, timestamp: Number(r.timestamp) })
+);
+
+const staffAdvancesTable = new HybridTable<DBStaffAdvance>(
+  'staff_advances',
+  (v, uid) => ({ app_user_id: uid, id: v.id, staff_id: v.staffId, amount: v.amount, date: v.date, type: v.type, payment_method: v.paymentMethod, note: v.note || null, timestamp: v.timestamp, updated_at: new Date().toISOString() }),
+  (r) => ({ id: r.id, staffId: r.staff_id, amount: Number(r.amount || 0), date: r.date, type: r.type, paymentMethod: r.payment_method, note: r.note || undefined, timestamp: Number(r.timestamp) })
+);
+
 export const db = {
   bills: billsTable,
   menuItems: menuItemsTable,
@@ -727,6 +748,9 @@ export const db = {
   expenses: expensesTable,
   posCustomers: posCustomersTable,
   selfOrders: selfOrdersTable,
+  staff: staffTable,
+  staffAttendance: staffAttendanceTable,
+  staffAdvances: staffAdvancesTable,
   deletedRecords: { add: async () => {}, toArray: async () => [] } as unknown as HybridTable<BaseDBRecord>,
 };
 
@@ -748,6 +772,10 @@ export const getTable = (tableName: string): HybridTable<BaseDBRecord> | undefin
     case 'expenses': return db.expenses as unknown as HybridTable<BaseDBRecord>;
     case 'pos_customers': return db.posCustomers as unknown as HybridTable<BaseDBRecord>;
     case 'self_orders': return db.selfOrders as unknown as HybridTable<BaseDBRecord>;
+    case 'staff': return db.staff as unknown as HybridTable<BaseDBRecord>;
+    case 'staff_attendance': return db.staffAttendance as unknown as HybridTable<BaseDBRecord>;
+    case 'staff_advances': return db.staffAdvances as unknown as HybridTable<BaseDBRecord>;
     default: return undefined;
   }
 };
+

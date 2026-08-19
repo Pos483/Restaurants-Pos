@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { DBMenuItem, db, getNextKotNumber, deductStockForBill, recordCustomerCredit, normalizePhone, getNextBillNumber, upsertPosCustomer } from '../db';
+import { DBMenuItem, db, getNextKotNumber, deductStockForBill, recordCustomerCredit, normalizePhone, getNextBillNumber, upsertPosCustomer, findCustomerByPhone } from '../db';
 import { useLiveQuery } from '../db';
 import { Plus, Minus, Printer, Save, UserPlus, Tag, Star, Trash2, ChevronLeft, ChevronRight, X, CheckCircle } from 'lucide-react';
 import { trackEvent } from '../utils/analytics';
@@ -46,8 +46,8 @@ export default function QuickBilling() {
     const autofill = async () => {
       const clean = normalizePhone(customerPhone);
       if (clean.length === 10) {
-        const match = await db.customers.where('phone').equals(clean).first();
-        if (match) {
+        const match = await findCustomerByPhone(clean);
+        if (match && match.name) {
           setCustomerName(match.name);
         }
       }

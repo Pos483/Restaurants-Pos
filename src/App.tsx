@@ -23,11 +23,11 @@ import PublicOrdering from './components/PublicOrdering';
 // ── Lazy imports (loaded on first tab visit) ─────────────────────────────────
 const QuickBilling       = lazy(() => import('./components/QuickBilling'));
 const Menu               = lazy(() => import('./components/Menu'));
-const RestaurantProfile  = lazy(() => import('./components/RestaurantProfile'));
 const RestaurantSettings = lazy(() => import('./components/RestaurantSettings'));
 const Reports            = lazy(() => import('./components/Reports'));
 const KhataBook          = lazy(() => import('./components/KhataBook'));
 const Customers          = lazy(() => import('./components/Customers'));
+const StaffManagement    = lazy(() => import('./components/StaffManagement'));
 const StockManagement    = lazy(() => import('./components/StockManagement'));
 const KOTManagement      = lazy(() => import('./components/KOTManagement'));
 const HelpSupport        = lazy(() => import('./components/HelpSupport'));
@@ -54,10 +54,10 @@ export default function App() {
   // Listen to local cart decryption failure or encryption warning
   useEffect(() => {
     const handleCartDecryptionFailed = () => {
-      showToast('⚠️ Local Cart security check fail ho gaya. Cart data decrypt nahi ho saka (Shayad local session key change hui hai).', 'error');
+      showToast('⚠️ Local Cart security check failed. Cart data could not be decrypted.', 'error');
     };
     const handleCartEncryptionWarning = () => {
-      showToast('⚠️ Cart storage encryption fail ho gaya. Compatibility mode me save ho raha hai.', 'error');
+      showToast('⚠️ Cart storage encryption failed. Saving in compatibility mode.', 'error');
     };
     window.addEventListener('cart-decryption-failed', handleCartDecryptionFailed);
     window.addEventListener('cart-encryption-warning', handleCartEncryptionWarning);
@@ -95,7 +95,7 @@ export default function App() {
       await db.activeOrders.update(tableId, { orders: newOrders });
     } catch (err: any) {
       console.error('Failed to update order:', err);
-      showToast(err?.message || '⚠️ Order update fail ho gaya. Kripya punah prayas karein.', 'error');
+      showToast(err?.message || '⚠️ Order update failed. Please try again.', 'error');
     }
   };
 
@@ -105,7 +105,7 @@ export default function App() {
       setActiveTab('tables');
     } catch (err: any) {
       console.error('Failed to place order:', err);
-      showToast(err?.message || '⚠️ Order place karne me samasya aayi.', 'error');
+      showToast(err?.message || '⚠️ Failed to place order.', 'error');
     }
   };
 
@@ -132,11 +132,11 @@ export default function App() {
       });
       if (!result) {
         console.error('Settle bill: update returned falsy — bill may not have been saved.');
-        showToast('⚠️ Bill settle nahi ho saka. Table status update nahi hua.', 'error');
+        showToast('⚠️ Bill settlement failed. Table status could not be updated.', 'error');
       }
     } catch (err: any) {
       console.error('Failed to settle bill:', err);
-      showToast(err?.message || '⚠️ Bill settle karne me error aaya.', 'error');
+      showToast(err?.message || '⚠️ An error occurred while settling the bill.', 'error');
       if (err?.message?.includes('RATE_LIMIT_EXCEEDED') && user?.id) {
         await handleRateLimitError();
         return;
@@ -269,11 +269,11 @@ export default function App() {
       <Suspense fallback={<PageLoader />}>
         {activeTab === 'quick'        && <QuickBilling />}
         {activeTab === 'menu'         && <Menu />}
-        {activeTab === 'profile'      && <RestaurantProfile />}
-        {activeTab === 'settings'     && <RestaurantSettings />}
+        {(activeTab === 'settings' || activeTab === 'profile') && <RestaurantSettings />}
         {activeTab === 'reports'      && <Reports />}
         {activeTab === 'khata'        && <KhataBook />}
         {activeTab === 'customers'    && <Customers />}
+        {activeTab === 'staff'        && <StaffManagement />}
         {activeTab === 'stock'        && <StockManagement />}
         {activeTab === 'kot'          && <KOTManagement />}
         {activeTab === 'help'         && <HelpSupport />}

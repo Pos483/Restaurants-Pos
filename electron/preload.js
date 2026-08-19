@@ -36,7 +36,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('update-error', callback);
   },
   removeListeners: (channel) => ipcRenderer.removeAllListeners(channel),
-
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
 });
 
 contextBridge.exposeInMainWorld('electron', {

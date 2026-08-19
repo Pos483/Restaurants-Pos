@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Table, OrderItem, MenuItem } from '../types';
-import { DBMenuItem, DBCategory, db, localDb, getNextKotNumber, deductStockForBill, recordCustomerCredit, DBCustomer, normalizePhone, getNextBillNumber, upsertPosCustomer } from '../db';
+import { DBMenuItem, DBCategory, db, getNextKotNumber, deductStockForBill, recordCustomerCredit, normalizePhone, getNextBillNumber, upsertPosCustomer, searchCustomersUnified, findCustomerByPhone, CustomerSearchResult } from '../db';
 import { useLiveQuery } from '../db';
 import { Plus, Minus, Star, UserPlus, Tag, Printer, ArrowLeft, Trash2, ChevronLeft, ChevronRight, X, CheckCircle } from 'lucide-react';
 import { trackEvent } from '../utils/analytics';
@@ -48,14 +48,14 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
   const [creditCustomerPhone, setCreditCustomerPhone] = useState('');
   const [creditCustomerName, setCreditCustomerName] = useState('');
   const [activeCreditCustomerField, setActiveCreditCustomerField] = useState<'name' | 'phone'>('name');
-  const [creditCustomerSuggestions, setCreditCustomerSuggestions] = useState<DBCustomer[]>([]);
+  const [creditCustomerSuggestions, setCreditCustomerSuggestions] = useState<CustomerSearchResult[]>([]);
 
   useEffect(() => {
     const autofillCredit = async () => {
       const clean = normalizePhone(creditCustomerPhone);
       if (clean.length === 10) {
-        const match = await db.customers.where('phone').equals(clean).first();
-        if (match) {
+        const match = await findCustomerByPhone(clean);
+        if (match && match.name) {
           setCreditCustomerName(match.name);
         }
       }
@@ -67,8 +67,8 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
     const autofillStandard = async () => {
       const clean = normalizePhone(customerPhone);
       if (clean.length === 10) {
-        const match = await db.customers.where('phone').equals(clean).first();
-        if (match) {
+        const match = await findCustomerByPhone(clean);
+        if (match && match.name) {
           setCustomerName(match.name);
         }
       }
@@ -83,26 +83,8 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
     }
     const fetchSuggestions = async () => {
       try {
-        const query = activeCreditCustomerField === 'name' ? creditCustomerName.trim().toLowerCase() : creditCustomerPhone.trim();
-        if (!query) {
-          const list = await localDb.table<DBCustomer>('customers').orderBy('timestamp').reverse().limit(5).toArray();
-          setCreditCustomerSuggestions(list);
-          return;
-        }
-
-        let list: DBCustomer[] = [];
-        const customersTable = localDb.table<DBCustomer>('customers');
-        if (activeCreditCustomerField === 'name') {
-          list = await customersTable
-            .filter(c => c.name.toLowerCase().includes(query))
-            .limit(5)
-            .toArray();
-        } else {
-          list = await customersTable
-            .filter(c => c.phone.includes(query))
-            .limit(5)
-            .toArray();
-        }
+        const query = activeCreditCustomerField === 'name' ? creditCustomerName : creditCustomerPhone;
+        const list = await searchCustomersUnified(query, 6);
         setCreditCustomerSuggestions(list);
       } catch (err) {
         console.error('Error fetching credit customer suggestions:', err);
