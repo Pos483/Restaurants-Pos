@@ -102,7 +102,7 @@ export default function ResetPasswordScreen() {
                 SIYA BILL
               </h1>
               <span className="text-[10px] font-black tracking-tight px-2 py-0.5 rounded-md bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-900/50">
-                v{import.meta.env.VITE_APP_VERSION || '3.4.3'}
+                v{import.meta.env.VITE_APP_VERSION || '3.4.4'}
               </span>
             </div>
             <p className="text-xs font-semibold tracking-[0.2em] uppercase text-gray-400 dark:text-gray-500 mt-1 transition-colors">

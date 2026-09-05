@@ -752,9 +752,10 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
     if (localOrders.length === 0 || isPrinting) return;
     try {
       await onPlaceOrder(table.id, localOrders);
-      onSelectTable(null);
+      showToast(table.status === 'occupied' ? 'Order updated successfully!' : 'Order placed successfully!', 'success');
     } catch (e) {
       console.error('Failed to place/update order:', e);
+      showToast('Failed to save order', 'error');
     }
   };
 
