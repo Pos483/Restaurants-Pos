@@ -267,7 +267,10 @@ export const clearAllLocalTables = async () => {
     'pos_customers',
     'carts',
     'syncQueue',
-    'print_queue'
+    'print_queue',
+    'staff',
+    'staff_attendance',
+    'staff_advances'
   ];
   for (const table of tables) {
     try {

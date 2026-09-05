@@ -22,6 +22,7 @@ export {
   processSyncQueue,
   pullTable,
   pullFromSupabase,
+  syncLocalStaffToSupabase,
   triggerPull,
   triggerSync,
   startAutoPoll,

@@ -675,7 +675,7 @@ export default function LoginScreen({ onLoginSuccess }: Props) {
 
         {/* Footer below card */}
         <p className="text-center text-xs text-slate-400 dark:text-slate-500 mt-4">
-          © {new Date().getFullYear()} Siya Bill POS · v{import.meta.env.VITE_APP_VERSION || '3.4.1'}
+          © {new Date().getFullYear()} Siya Bill POS · v{import.meta.env.VITE_APP_VERSION || '3.4.2'}
         </p>
 
       </div>

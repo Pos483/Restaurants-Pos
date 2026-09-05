@@ -93,7 +93,7 @@ export const pullTable = async (tableName: string, userId: string) => {
 
     if (allRows.length === 0) {
       if (!isLargeTable && tableName !== 'active_orders') {
-        if (tableName !== 'restaurant_profile' && tableName !== 'restaurant_settings') {
+        if (tableName !== 'restaurant_profile' && tableName !== 'restaurant_settings' && tableName !== 'staff') {
           await localDb.table(tableName).clear();
         }
       }
@@ -117,7 +117,7 @@ export const pullTable = async (tableName: string, userId: string) => {
         for (const localItem of localItems) {
           const localId = String(localItem.id);
           if (!remoteIds.has(localId)) {
-            if (tableName === 'restaurant_profile' || tableName === 'restaurant_settings') continue;
+            if (tableName === 'restaurant_profile' || tableName === 'restaurant_settings' || tableName === 'staff') continue;
             if (localItem.id !== undefined) {
               await dexieTable.delete(localItem.id);
             }
@@ -129,6 +129,53 @@ export const pullTable = async (tableName: string, userId: string) => {
     notifyGlobalChange(tableName);
   } catch (err) {
     console.error(`[pullTable] Fatal error in table ${tableName}:`, err);
+  }
+};
+
+// ── Staff Local-to-Cloud Sync Helper ──────────────────────────────────────────
+
+export const syncLocalStaffToSupabase = async (userId?: string) => {
+  const uid = userId || getUserId();
+  if (!supabase || !uid || !navigator.onLine) return;
+  try {
+    // 1. Staff Directory
+    const localStaff = await localDb.table('staff').toArray();
+    if (localStaff.length > 0) {
+      const rows = localStaff.map(s => db.staff.toRow(s, uid));
+      const { error } = await supabase.from('staff').upsert(rows, { onConflict: 'app_user_id,id' });
+      if (error) {
+        console.error('[syncLocalStaffToSupabase] Error uploading staff:', error);
+      }
+    }
+
+    // 2. Staff Attendance
+    const localAtt = await localDb.table('staff_attendance').toArray();
+    if (localAtt.length > 0) {
+      const rows = localAtt.map(a => db.staffAttendance.toRow(a, uid));
+      for (let i = 0; i < rows.length; i += 100) {
+        const chunk = rows.slice(i, i + 100);
+        const { error } = await supabase.from('staff_attendance').upsert(chunk, { onConflict: 'app_user_id,id' });
+        if (error) {
+          console.error('[syncLocalStaffToSupabase] Error uploading attendance chunk:', error);
+        }
+      }
+    }
+
+    // 3. Staff Advances
+    const localAdv = await localDb.table('staff_advances').toArray();
+    if (localAdv.length > 0) {
+      const rows = localAdv.map(v => db.staffAdvances.toRow(v, uid));
+      for (let i = 0; i < rows.length; i += 100) {
+        const chunk = rows.slice(i, i + 100);
+        const { error } = await supabase.from('staff_advances').upsert(chunk, { onConflict: 'app_user_id,id' });
+        if (error) {
+          console.error('[syncLocalStaffToSupabase] Error uploading advances chunk:', error);
+        }
+      }
+    }
+    logger.log('[DB] Local staff data synchronized with Supabase successfully.');
+  } catch (err) {
+    console.error('[syncLocalStaffToSupabase] Unexpected error:', err);
   }
 };
 
@@ -150,7 +197,10 @@ export const pullFromSupabase = async () => {
     'customers',
     'customer_transactions',
     'expenses',
-    'pos_customers'
+    'pos_customers',
+    'staff',
+    'staff_attendance',
+    'staff_advances'
   ];
 
   for (const tableName of tables) {
@@ -228,7 +278,10 @@ export const setupRealtime = (userId: string) => {
     'customer_transactions',
     'expenses',
     'pos_customers',
-    'self_orders'
+    'self_orders',
+    'staff',
+    'staff_attendance',
+    'staff_advances'
   ];
   tables.forEach(table => {
     supabase!.channel(`rt_${table}`)
@@ -316,6 +369,8 @@ export const initDb = async () => {
     try {
       await pullTable('restaurant_profile', userId);
       await pullTable('restaurant_settings', userId);
+      // Push any local staff data to Supabase to prevent data loss before pull
+      await syncLocalStaffToSupabase(userId);
     } catch (e) {
       console.error('[DB] Priority sync failed:', e);
     }

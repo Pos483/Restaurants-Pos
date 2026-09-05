@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
-import { useLiveQuery, db } from '../db';
+import { useLiveQuery, db, syncLocalStaffToSupabase, pullTable, getUserId } from '../db';
 import { DBStaff, DBStaffAttendance, DBStaffAdvance } from '../db/types';
 import {
   Users, UserPlus, Calendar, IndianRupee, CheckCircle2,
   Edit3, Trash2, Wallet, X,
   ChevronLeft, ChevronRight, Phone,
-  Receipt, Sparkles, Printer, Table2
+  Receipt, Sparkles, Printer, Table2,
+  RefreshCw, Cloud
 } from 'lucide-react';
 import { useToast } from './Toast';
 
@@ -56,6 +57,36 @@ export default function StaffManagement() {
   const [advDate, setAdvDate] = useState<string>(getTodayString());
   const [advMethod, setAdvMethod] = useState<'cash' | 'upi' | 'bank_transfer' | 'other'>('cash');
   const [advNote, setAdvNote] = useState<string>('');
+
+  // Cloud Sync state
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+
+  const handleSyncWithCloud = async () => {
+    if (!navigator.onLine) {
+      showToast('⚠️ Internet is disconnected. Cannot sync with Supabase.', 'error');
+      return;
+    }
+    const userId = getUserId();
+    if (!userId) {
+      showToast('⚠️ No active user session found. Please log in first.', 'error');
+      return;
+    }
+    setIsSyncing(true);
+    try {
+      // 1. Upload any local records
+      await syncLocalStaffToSupabase(userId);
+      // 2. Pull remote records from Supabase
+      await pullTable('staff', userId);
+      await pullTable('staff_attendance', userId);
+      await pullTable('staff_advances', userId);
+      showToast('☁️ Staff data synced with Supabase successfully!');
+    } catch (err: any) {
+      console.error('Staff cloud sync failed:', err);
+      showToast(err?.message || '⚠️ Cloud sync encountered an error.', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // ── Database Queries ──────────────────────────────────────────────────────────
   const staffList = useLiveQuery(() => db.staff.toArray(), [], 'staff') || [];
@@ -242,23 +273,17 @@ export default function StaffManagement() {
       return;
     }
     try {
-      for (const staff of activeStaff) {
+      const recordsToPut: DBStaffAttendance[] = activeStaff.map(staff => {
         const existing = attendanceMapForDate.get(staff.id);
-        if (existing) {
-          await db.staffAttendance.update(existing.id, {
-            status: 'present',
-            timestamp: Date.now()
-          });
-        } else {
-          await db.staffAttendance.add({
-            id: crypto.randomUUID(),
-            staffId: staff.id,
-            date: selectedDate,
-            status: 'present',
-            timestamp: Date.now()
-          });
-        }
-      }
+        return {
+          id: existing?.id || crypto.randomUUID(),
+          staffId: staff.id,
+          date: selectedDate,
+          status: 'present',
+          timestamp: Date.now()
+        };
+      });
+      await db.staffAttendance.bulkPut(recordsToPut);
       showToast(`✅ All ${activeStaff.length} staff members marked Present.`);
     } catch (err) {
       console.error('Failed to mark all present:', err);
@@ -664,12 +689,16 @@ export default function StaffManagement() {
               <Users size={22} className="stroke-[2.2]" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-slate-50">
                   Staff &amp; Attendance Management
                 </h1>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/50">
                   {activeStaff.length} Active Staff
+                </span>
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/50">
+                  <Cloud size={11} className="stroke-[2.5]" />
+                  Supabase Connected
                 </span>
               </div>
               <p className="text-xs text-slate-400 dark:text-slate-500 font-semibold mt-0.5 flex items-center gap-1.5">
@@ -686,6 +715,16 @@ export default function StaffManagement() {
 
           {/* Top Quick Actions */}
           <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={handleSyncWithCloud}
+              disabled={isSyncing}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 active:scale-95 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer disabled:opacity-60"
+              title="Sync staff, attendance, and advances with Supabase cloud"
+            >
+              <RefreshCw size={14} className={isSyncing ? "animate-spin text-indigo-500" : "text-slate-500"} />
+              <span>{isSyncing ? "Syncing..." : "Sync Cloud"}</span>
+            </button>
             <button
               onClick={() => openAdvanceModal()}
               className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition-all cursor-pointer border border-emerald-500/30"
