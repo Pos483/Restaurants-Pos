@@ -98,9 +98,13 @@ export default function App() {
     }
   };
 
-  const handlePlaceOrder = async (tableId: number) => {
+  const handlePlaceOrder = async (tableId: number, orders?: OrderItem[]) => {
     try {
-      await db.activeOrders.update(tableId, { status: 'occupied' });
+      const updates: any = { status: 'occupied' };
+      if (orders && orders.length > 0) {
+        updates.orders = orders;
+      }
+      await db.activeOrders.update(tableId, updates);
       setActiveTab('tables');
     } catch (err: any) {
       console.error('Failed to place order:', err);
@@ -127,7 +131,11 @@ export default function App() {
       const result = await db.activeOrders.update(tableId, {
         status: 'available',
         orders: [],
-        tablePin: Math.floor(100 + Math.random() * 900).toString()
+        tablePin: Math.floor(100 + Math.random() * 900).toString(),
+        mergedTableIds: [],
+        mergedSnapshots: [],
+        customerName: undefined,
+        customerPhone: undefined
       });
       if (!result) {
         console.error('Settle bill: update returned falsy — bill may not have been saved.');

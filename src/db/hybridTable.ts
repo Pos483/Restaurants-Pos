@@ -628,10 +628,30 @@ const restaurantSettingsTable = new HybridTable<DBRestaurantSettings>(
   })
 );
 
+const getSavedMergedMeta = (tableId: number | string) => {
+  try {
+    const saved = localStorage.getItem(`table_merged_meta_${tableId}`);
+    if (saved) return JSON.parse(saved);
+  } catch (_) {}
+  return {};
+};
+
 const activeOrdersTable = new HybridTable<Table>(
   'active_orders',
   (o, uid) => ({ app_user_id: uid, id: o.id, status: o.status, orders: o.orders ?? [], table_pin: o.tablePin ?? null, customer_name: o.customerName ?? null, customer_phone: o.customerPhone ?? null, updated_at: new Date().toISOString() }),
-  (r) => ({ id: Number(r.id), status: r.status as Table['status'], orders: (r.orders as Table['orders']) ?? [], tablePin: (r.table_pin as string) ?? undefined, customerName: (r.customer_name as string) ?? undefined, customerPhone: (r.customer_phone as string) ?? undefined })
+  (r) => {
+    const meta = getSavedMergedMeta(r.id);
+    return {
+      id: Number(r.id),
+      status: r.status as Table['status'],
+      orders: (r.orders as Table['orders']) ?? [],
+      tablePin: (r.table_pin as string) ?? undefined,
+      customerName: (r.customer_name as string) ?? undefined,
+      customerPhone: (r.customer_phone as string) ?? undefined,
+      mergedTableIds: (r.merged_table_ids as number[]) ?? meta.mergedTableIds ?? undefined,
+      mergedSnapshots: (r.merged_snapshots as any[]) ?? meta.mergedSnapshots ?? undefined
+    };
+  }
 );
 
 const selfOrdersTable = new HybridTable<DBSelfOrder>(

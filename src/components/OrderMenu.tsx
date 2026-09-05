@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Table, OrderItem, MenuItem } from '../types';
+import { Table, OrderItem, MenuItem, mergeOrderItems, MergedTableSnapshot } from '../types';
 import { DBMenuItem, DBCategory, db, getNextKotNumber, deductStockForBill, recordCustomerCredit, normalizePhone, getNextBillNumber, upsertPosCustomer, searchCustomersUnified, findCustomerByPhone, CustomerSearchResult } from '../db';
 import { useLiveQuery } from '../db';
-import { Plus, Minus, Star, UserPlus, Tag, Printer, ArrowLeft, Trash2, ChevronLeft, ChevronRight, X, CheckCircle } from 'lucide-react';
+import { Plus, Minus, Star, UserPlus, Tag, Printer, ArrowLeft, Trash2, ChevronLeft, ChevronRight, X, CheckCircle, GitMerge, Undo2 } from 'lucide-react';
 import { trackEvent } from '../utils/analytics';
 import { ThermalPrinter } from '../printer';
 import { useToast } from './Toast';
@@ -12,13 +12,14 @@ import CustomerModal from './CustomerModal';
 import DiscountModal from './DiscountModal';
 import CustomItemModal from './CustomItemModal';
 import ConfirmModal from './ConfirmModal';
+import TableMergeModal from './TableMergeModal';
 
 interface Props {
   tables: Table[];
   selectedTableId: number | null;
   onSelectTable: (id: number | null) => void;
   onUpdateOrder: (tableId: number, orders: OrderItem[]) => void;
-  onPlaceOrder: (tableId: number) => void;
+  onPlaceOrder: (tableId: number, orders?: OrderItem[]) => void | Promise<void>;
   onSettleBill: (tableId: number, paymentMethod: string) => void;
 }
 
@@ -43,6 +44,8 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
   const [showDiscount, setShowDiscount] = useState<boolean>(false);
   const [showCustomItem, setShowCustomItem] = useState<boolean>(false);
   const [showClearConfirm, setShowClearConfirm] = useState<boolean>(false);
+  const [showMergeModal, setShowMergeModal] = useState<boolean>(false);
+  const [mergeTargetTableId, setMergeTargetTableId] = useState<number | null>(null);
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'UPI' | 'Card' | 'Credit' | 'Unpaid'>('Cash');
   const [creditCustomerPhone, setCreditCustomerPhone] = useState('');
@@ -97,7 +100,7 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
   const [pendingKdsData, setPendingKdsData] = useState<{ newItemsToPrint: OrderItem[], kotNum: string } | null>(null);
   const [localOrders, setLocalOrders] = useState<OrderItem[]>([]);
   const [pendingKotNum, setPendingKotNum] = useState<string | null>(null);
-  const [settledBillData, setSettledBillData] = useState<{ total: number; billNumber: number } | null>(null);
+  const [settledBillData, setSettledBillData] = useState<{ total: number; billNumber: number; tableLabel?: string } | null>(null);
 
   useEffect(() => {
     if (localOrders.length === 0) {
@@ -112,6 +115,7 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
 
   const pendingUpdateRef = useRef<{ tableId: number; orders: OrderItem[] } | null>(null);
   const debouncedUpdateRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isUnmergingRef = useRef(false);
 
   const flushPendingUpdate = () => {
     if (debouncedUpdateRef.current) {
@@ -163,7 +167,7 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
         setCustomerPhone('');
       }
     } else if (table) {
-      if (pendingUpdateRef.current) return;
+      if (isUnmergingRef.current || pendingUpdateRef.current) return;
 
       // M-3 Fix: Compare JSON of items and quantities instead of fragile length heuristic
       const localStr = JSON.stringify(localOrders.map(o => ({ id: o.menuItem?.id, q: o.quantity })));
@@ -193,6 +197,7 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
     setShowCustomItem(false);
     setShowClearConfirm(false);
     setShowKdsConfirm(false);
+    setShowMergeModal(false);
     setVariantModalItem(null);
     setPendingKdsData(null);
     setIsPrinting(false);
@@ -249,8 +254,240 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
   // Ensure tables are sorted by ID numerically
   const sortedTables = [...tables].sort((a, b) => a.id - b.id);
 
+  const getEffectiveMergedIds = (t: Table | null): number[] => {
+    if (!t) return [];
+    if (t.mergedTableIds && t.mergedTableIds.length > 0) return t.mergedTableIds;
+    try {
+      const saved = localStorage.getItem(`table_merged_meta_${t.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed.mergedTableIds) && parsed.mergedTableIds.length > 0) {
+          return parsed.mergedTableIds;
+        }
+      }
+    } catch (_) {}
+    return [];
+  };
+
+  const handleMergeTables = async (targetId: number, sourceIds: number[]) => {
+    try {
+      const target = tables.find(t => t.id === targetId);
+      if (!target) return;
+
+      let combinedOrders = (selectedTableId === targetId && localOrders.length > 0)
+        ? [...localOrders]
+        : [...(target.orders || [])];
+      let snapshots: MergedTableSnapshot[] = [...(target.mergedSnapshots || [])];
+      if (snapshots.length === 0) {
+        try {
+          const saved = localStorage.getItem(`table_merged_meta_${targetId}`);
+          if (saved) snapshots = JSON.parse(saved).mergedSnapshots || [];
+        } catch (_) {}
+      }
+      const newlyMergedIds: number[] = [];
+
+      let customerNameToKeep = target.customerName || '';
+      let customerPhoneToKeep = target.customerPhone || '';
+
+      for (const sId of sourceIds) {
+        const src = tables.find(t => t.id === sId);
+        if (!src || !src.orders || src.orders.length === 0) continue;
+
+        snapshots.push({
+          tableId: sId,
+          orders: JSON.parse(JSON.stringify(src.orders)),
+          customerName: src.customerName,
+          customerPhone: src.customerPhone,
+        });
+
+        newlyMergedIds.push(sId);
+        const srcMerged = getEffectiveMergedIds(src);
+        if (srcMerged.length > 0) {
+          newlyMergedIds.push(...srcMerged);
+        }
+
+        combinedOrders = mergeOrderItems(combinedOrders, src.orders);
+
+        if (!customerNameToKeep && src.customerName) {
+          customerNameToKeep = src.customerName;
+        }
+        if (!customerPhoneToKeep && src.customerPhone) {
+          customerPhoneToKeep = src.customerPhone;
+        }
+
+        try {
+          localStorage.removeItem(`table_merged_meta_${sId}`);
+        } catch (_) {}
+
+        await db.activeOrders.update(sId, {
+          status: 'available',
+          orders: [],
+          tablePin: Math.floor(100 + Math.random() * 900).toString(),
+          customerName: undefined,
+          customerPhone: undefined,
+          mergedTableIds: [],
+          mergedSnapshots: [],
+        });
+      }
+
+      const currentTargetMerged = getEffectiveMergedIds(target);
+      const allMergedIds = Array.from(
+        new Set([...currentTargetMerged, ...newlyMergedIds])
+      );
+
+      try {
+        localStorage.setItem(`table_merged_meta_${targetId}`, JSON.stringify({
+          mergedTableIds: allMergedIds,
+          mergedSnapshots: snapshots,
+        }));
+      } catch (_) {}
+
+      await db.activeOrders.update(targetId, {
+        status: 'occupied',
+        orders: combinedOrders,
+        mergedTableIds: allMergedIds,
+        mergedSnapshots: snapshots,
+        customerName: customerNameToKeep || undefined,
+        customerPhone: customerPhoneToKeep || undefined,
+      });
+
+      if (selectedTableId === targetId) {
+        setLocalOrders(combinedOrders);
+        if (customerNameToKeep) setCustomerName(customerNameToKeep);
+        if (customerPhoneToKeep) setCustomerPhone(customerPhoneToKeep);
+      } else {
+        onSelectTable(targetId);
+      }
+
+      showToast(`Table ${sourceIds.join(', ')} successfully merged into Table ${targetId}!`, 'success');
+    } catch (err) {
+      console.error('Failed to merge tables:', err);
+      showToast('Failed to merge tables. Please try again.', 'error');
+    }
+  };
+
+  const handleUnmergeTable = async (sourceIdToUnmerge: number) => {
+    if (!table || isUnmergingRef.current) return;
+    flushPendingUpdate();
+    isUnmergingRef.current = true;
+    try {
+      let snapshots: MergedTableSnapshot[] = [...(table.mergedSnapshots || [])];
+      if (snapshots.length === 0) {
+        try {
+          const saved = localStorage.getItem(`table_merged_meta_${table.id}`);
+          if (saved) snapshots = JSON.parse(saved).mergedSnapshots || [];
+        } catch (_) {}
+      }
+
+      const snapshotIndex = snapshots.findIndex(s => s.tableId === sourceIdToUnmerge);
+      if (snapshotIndex === -1) {
+        showToast(`Snapshot for Table ${sourceIdToUnmerge} not found.`, 'error');
+        isUnmergingRef.current = false;
+        return;
+      }
+
+      const snapshot = snapshots[snapshotIndex];
+
+      // Calculate remaining orders synchronously from current cart (localOrders)
+      let remainingOrders = [...localOrders];
+      for (const itemToRemove of snapshot.orders) {
+        const itemId = itemToRemove.menuItem?.id || itemToRemove.name;
+        const idx = remainingOrders.findIndex(o => (o.menuItem?.id || o.name) === itemId);
+        if (idx > -1) {
+          const existing = remainingOrders[idx];
+          const updatedQty = (existing.quantity || 0) - (itemToRemove.quantity || 0);
+          if (updatedQty <= 0) {
+            remainingOrders.splice(idx, 1);
+          } else {
+            remainingOrders[idx] = {
+              ...existing,
+              quantity: updatedQty,
+              printedQuantity: Math.min(existing.printedQuantity || 0, updatedQty)
+            };
+          }
+        }
+      }
+
+      const currentMergedIds = getEffectiveMergedIds(table);
+      const updatedMergedIds = currentMergedIds.filter(id => id !== sourceIdToUnmerge);
+      const updatedSnapshots = snapshots.filter((_, i) => i !== snapshotIndex);
+
+      try {
+        if (updatedMergedIds.length > 0) {
+          localStorage.setItem(`table_merged_meta_${table.id}`, JSON.stringify({
+            mergedTableIds: updatedMergedIds,
+            mergedSnapshots: updatedSnapshots
+          }));
+        } else {
+          localStorage.removeItem(`table_merged_meta_${table.id}`);
+        }
+        localStorage.removeItem(`table_merged_meta_${sourceIdToUnmerge}`);
+      } catch (_) {}
+
+      // Immediately update local state so UI updates without flicker
+      setLocalOrders(remainingOrders);
+
+      const targetUpdates: any = {
+        orders: remainingOrders,
+        mergedTableIds: updatedMergedIds,
+        mergedSnapshots: updatedSnapshots,
+      };
+      if (remainingOrders.length === 0 && updatedMergedIds.length === 0) {
+        targetUpdates.status = 'available';
+        targetUpdates.tablePin = Math.floor(100 + Math.random() * 900).toString();
+      }
+
+      // Update source table and target table concurrently
+      await Promise.all([
+        db.activeOrders.update(sourceIdToUnmerge, {
+          status: 'occupied',
+          orders: snapshot.orders,
+          customerName: snapshot.customerName,
+          customerPhone: snapshot.customerPhone,
+          tablePin: Math.floor(100 + Math.random() * 900).toString(),
+          mergedTableIds: [],
+          mergedSnapshots: [],
+        }),
+        db.activeOrders.update(table.id, targetUpdates)
+      ]);
+
+      showToast(`Table ${sourceIdToUnmerge} unmerged successfully. Purani state restore ho gayi!`, 'info');
+    } catch (err) {
+      console.error('Failed to unmerge table:', err);
+      showToast('Failed to unmerge table.', 'error');
+    } finally {
+      isUnmergingRef.current = false;
+    }
+  };
+
+  const tablesWithCurrentCart = sortedTables.map(t => {
+    if (table && t.id === table.id) {
+      return { ...t, orders: localOrders };
+    }
+    return t;
+  });
+
   if (!table) {
-    return <TableGrid tables={sortedTables} onSelectTable={onSelectTable} onAddTable={handleAddTable} />;
+    return (
+      <>
+        <TableGrid 
+          tables={sortedTables} 
+          onSelectTable={onSelectTable} 
+          onAddTable={handleAddTable} 
+          onOpenMergeModal={() => {
+            setMergeTargetTableId(null);
+            setShowMergeModal(true);
+          }}
+        />
+        <TableMergeModal
+          isOpen={showMergeModal}
+          tables={tablesWithCurrentCart}
+          initialTargetTableId={mergeTargetTableId}
+          onClose={() => setShowMergeModal(false)}
+          onMerge={handleMergeTables}
+        />
+      </>
+    );
   }
 
   const subtotal = localOrders.reduce((sum, item) => sum + ((item.menuItem?.price || 0) * (item.quantity || 0)), 0);
@@ -260,6 +497,9 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
   const gstPerc = globalSettings?.gstPercentage ?? 5;
   const tax = taxableAmount * (gstPerc / 100);
   const finalTotal = taxableAmount + tax;
+
+  const effectiveMergedIds = getEffectiveMergedIds(table);
+  const isMerged = effectiveMergedIds.length > 0;
 
   const handlePrintAndSettle = async (shouldPrint: boolean = true) => {
     flushPendingUpdate();
@@ -313,9 +553,13 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
       const actualCustomerName = isCredit ? creditCustomerName : customerName;
       const actualCustomerPhone = isCredit ? creditCustomerPhone : customerPhone;
 
+      const mergedIds = getEffectiveMergedIds(table);
+      const isMerged = mergedIds.length > 0;
+      const billTableId = isMerged ? `${table.id}, ${mergedIds.join(', ')}` : table.id;
+
       await db.bills.add({
         id: billId,
-        tableId: table.id,
+        tableId: billTableId,
         items: localOrders,
         subtotal,
         tax,
@@ -325,7 +569,11 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
         billNumber: currentSeq,
         discount: discountVal,
         customerName: actualCustomerName,
-        customerPhone: actualCustomerPhone
+        customerPhone: actualCustomerPhone,
+        data: {
+          mergedTableIds: mergedIds,
+          primaryTableId: table.id,
+        }
       });
 
       await deductStockForBill(billId, localOrders, currentSeq);
@@ -347,13 +595,16 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
 
       if (shouldPrint) {
         try {
-          await ThermalPrinter.printReceipt(table.id, localOrders, subtotal, tax, finalTotal, paymentMethod, currentSeq, globalSettings, discountVal, actualCustomerName, actualCustomerPhone, billTimestamp);
+          await ThermalPrinter.printReceipt(billTableId, localOrders, subtotal, tax, finalTotal, paymentMethod, currentSeq, globalSettings, discountVal, actualCustomerName, actualCustomerPhone, billTimestamp);
         } catch (printErr) {
           console.error('Printing failed, but saving/settling bill:', printErr);
         }
       }
 
-      setSettledBillData({ total: finalTotal, billNumber: currentSeq });
+      setSettledBillData({ total: finalTotal, billNumber: currentSeq, tableLabel: String(billTableId) });
+      try {
+        localStorage.removeItem(`table_merged_meta_${table.id}`);
+      } catch (_) {}
       trackEvent('settle_bill', 'billing', paymentMethod, finalTotal);
 
       onSettleBill(table.id, paymentMethod);
@@ -381,9 +632,12 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
     const { newItemsToPrint, kotNum } = pendingKdsData;
     try {
       const isCloudPrintSendingEnabled = localStorage.getItem('enableCloudPrintSending') !== 'false';
+      const isMergedTable = effectiveMergedIds.length > 0;
+      const kdsTableLabel = isMergedTable ? `Table ${table.id} (+${effectiveMergedIds.join(', ')})` : `Table ${table.id}`;
+
       await db.kdsOrders.add({
         id: Date.now().toString() + (isCloudPrintSendingEnabled ? '' : '-nocp'),
-        tableOrType: `Table ${table.id}`,
+        tableOrType: kdsTableLabel,
         items: newItemsToPrint,
         timestamp: Date.now(),
         status: 'pending',
@@ -444,7 +698,9 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
           kotNum = await getNextKotNumber();
           setPendingKotNum(kotNum);
         }
-        const printSuccess = await ThermalPrinter.printKOT(table.id, newItemsToPrint, kotNum);
+        const isMergedTable = effectiveMergedIds.length > 0;
+        const kotTableLabel = isMergedTable ? `${table.id} (+${effectiveMergedIds.join(', ')})` : table.id;
+        const printSuccess = await ThermalPrinter.printKOT(kotTableLabel, newItemsToPrint, kotNum);
         
         if (printSuccess) {
           setPendingKotNum(null);
@@ -454,7 +710,7 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
           const isCloudPrintSendingEnabled = localStorage.getItem('enableCloudPrintSending') !== 'false';
           await db.kdsOrders.add({
             id: Date.now().toString() + (isCloudPrintSendingEnabled ? '' : '-nocp'),
-            tableOrType: `Table ${table.id}`,
+            tableOrType: isMergedTable ? `Table ${table.id} (+${effectiveMergedIds.join(', ')})` : `Table ${table.id}`,
             items: newItemsToPrint,
             timestamp: Date.now(),
             status: 'pending',
@@ -488,6 +744,17 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
     } finally {
       setIsPrinting(false);
       isPrintingRef.current = false;
+    }
+  };
+
+  const handleUpdateOrPlaceOrder = async () => {
+    flushPendingUpdate();
+    if (localOrders.length === 0 || isPrinting) return;
+    try {
+      await onPlaceOrder(table.id, localOrders);
+      onSelectTable(null);
+    } catch (e) {
+      console.error('Failed to place/update order:', e);
     }
   };
 
@@ -797,7 +1064,29 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
             >
               {showMobileCart ? <X size={20} /> : <ArrowLeft size={20} />}
             </button>
-            <h2 className="text-lg font-bold text-gray-800 dark:text-slate-200 truncate flex-1" title={`Table ${table.id}`}>Table {table.id}</h2>
+            <div className="flex items-center gap-2 truncate flex-1 min-w-0">
+              <h2 className="text-lg font-bold text-gray-800 dark:text-slate-200 truncate" title={`Table ${table.id}`}>Table {table.id}</h2>
+              {isMerged && (
+                <span className="text-[10px] font-black text-amber-700 bg-amber-100/90 dark:text-amber-300 dark:bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-300/40 dark:border-amber-800/50 flex items-center gap-1 shrink-0" title={`Merged with Table ${effectiveMergedIds.join(', ')}`}>
+                  <GitMerge size={10} />
+                  +{effectiveMergedIds.map(id => `T${id}`).join(', ')}
+                </span>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setMergeTargetTableId(table.id);
+                setShowMergeModal(true);
+              }}
+              className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 dark:text-amber-300 text-xs font-bold rounded-lg border border-amber-200/60 dark:border-amber-800/50 transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer shadow-xs active:scale-95"
+              title="Merge another table into this bill"
+            >
+              <GitMerge size={14} />
+              <span className="hidden sm:inline">{isMerged ? 'Merge More' : 'Merge Table'}</span>
+            </button>
+
             {localOrders.length > 0 && (
               <button 
                 onClick={() => setShowClearConfirm(true)}
@@ -812,6 +1101,40 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
             {table.status.toUpperCase()}
           </span>
         </div>
+
+        {/* Merged notification banner & Unmerge action */}
+        {isMerged && (
+          <div className="px-4 py-2.5 bg-amber-50/90 dark:bg-amber-950/30 border-b border-amber-200/60 dark:border-amber-900/40 flex flex-col gap-1.5 shrink-0 animate-fade-in">
+            <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300 font-bold truncate">
+                <GitMerge size={14} className="text-amber-600 shrink-0" />
+                <span className="truncate">Merged with Table {effectiveMergedIds.join(', ')}</span>
+              </div>
+              <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-amber-200/60 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">
+                Combined Bill
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-1 pt-1 border-t border-amber-200/40 dark:border-amber-900/30">
+              <span className="text-[10px] text-amber-700/80 dark:text-amber-400 font-medium">
+                Galti se merge hua?
+              </span>
+              <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                {effectiveMergedIds.map(sId => (
+                  <button
+                    key={sId}
+                    type="button"
+                    onClick={() => handleUnmergeTable(sId)}
+                    className="text-[11px] font-black text-white bg-amber-600 hover:bg-amber-700 active:bg-amber-800 flex items-center gap-1 px-2.5 py-1 rounded-md shadow-xs transition-all cursor-pointer"
+                    title={`Table ${sId} ko wapas pehle jaisa restore karein`}
+                  >
+                    <Undo2 size={12} />
+                    Unmerge T{sId}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="flex-1 overflow-auto p-5">
           {localOrders.length === 0 ? (
@@ -848,15 +1171,26 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
               <div className="flex gap-2">
                 <button 
                   onClick={() => setShowCustomer(true)}
-                  className={`flex-1 py-3 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1 border-2 transition-all ${customerName || customerPhone ? 'border-orange-500 bg-orange-50 text-orange-700 dark:border-orange-600 dark:bg-orange-950/45 dark:text-orange-400' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-slate-800 dark:bg-[#1e293b] dark:text-slate-300 dark:hover:bg-slate-800/65'}`}
+                  className={`flex-1 py-2.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1 border-2 transition-all ${customerName || customerPhone ? 'border-orange-500 bg-orange-50 text-orange-700 dark:border-orange-600 dark:bg-orange-950/45 dark:text-orange-400' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-slate-800 dark:bg-[#1e293b] dark:text-slate-300 dark:hover:bg-slate-800/65'}`}
                 >
-                  <UserPlus size={14} /> {customerName ? customerName.split(' ')[0] : 'Customer Info'}
+                  <UserPlus size={13} /> {customerName ? customerName.split(' ')[0] : 'Customer'}
                 </button>
                 <button 
                   onClick={() => setShowDiscount(true)}
-                  className={`flex-1 py-3 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1 border-2 transition-all ${Number(discountAmount) > 0 ? 'border-orange-500 bg-orange-50 text-orange-700 dark:border-orange-600 dark:bg-orange-950/45 dark:text-orange-400' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-slate-800 dark:bg-[#1e293b] dark:text-slate-300 dark:hover:bg-slate-800/65'}`}
+                  className={`flex-1 py-2.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1 border-2 transition-all ${Number(discountAmount) > 0 ? 'border-orange-500 bg-orange-50 text-orange-700 dark:border-orange-600 dark:bg-orange-950/45 dark:text-orange-400' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-slate-800 dark:bg-[#1e293b] dark:text-slate-300 dark:hover:bg-slate-800/65'}`}
                 >
-                  <Tag size={14} /> {Number(discountAmount) > 0 ? `${discountAmount}${discountType === 'percentage' ? '%' : '₹'} Off` : 'Discount'}
+                  <Tag size={13} /> {Number(discountAmount) > 0 ? `${discountAmount}${discountType === 'percentage' ? '%' : '₹'}` : 'Discount'}
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setMergeTargetTableId(table.id);
+                    setShowMergeModal(true);
+                  }}
+                  className={`flex-1 py-2.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1 border-2 transition-all cursor-pointer ${isMerged ? 'border-amber-500 bg-amber-50 text-amber-700 dark:border-amber-600 dark:bg-amber-950/45 dark:text-amber-400' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-slate-800 dark:bg-[#1e293b] dark:text-slate-300 dark:hover:bg-slate-800/65'}`}
+                  title="Merge other tables with this table"
+                >
+                  <GitMerge size={13} /> {isMerged ? `+T${effectiveMergedIds.join(',')}` : 'Merge'}
                 </button>
               </div>
               <div className="flex justify-between text-sm font-bold text-gray-500 dark:text-slate-400">
@@ -889,9 +1223,9 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
               KOT
             </button>
             <button 
-              onClick={() => onPlaceOrder(table.id)}
+              onClick={handleUpdateOrPlaceOrder}
               disabled={localOrders.length === 0 || isPrinting}
-              className="flex-1 py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white rounded-xl font-bold text-base shadow-lg shadow-orange-200 transition-all disabled:shadow-none dark:bg-orange-600 dark:hover:bg-orange-700 dark:shadow-none whitespace-nowrap"
+              className="flex-1 py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white rounded-xl font-bold text-base shadow-lg shadow-orange-200 transition-all disabled:shadow-none dark:bg-orange-600 dark:hover:bg-orange-700 dark:shadow-none whitespace-nowrap cursor-pointer"
             >
               {table.status === 'occupied' ? 'Update Order' : 'Place Order'}
             </button>
@@ -1098,6 +1432,15 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
         }}
       />
 
+      {/* Table Merge Modal */}
+      <TableMergeModal
+        isOpen={showMergeModal}
+        tables={tablesWithCurrentCart}
+        initialTargetTableId={mergeTargetTableId || table.id}
+        onClose={() => setShowMergeModal(false)}
+        onMerge={handleMergeTables}
+      />
+
       {/* Floating Bottom Bar for Mobile */}
       {localOrders.length > 0 && !showMobileCart && (
         <div className="fixed bottom-0 left-0 right-0 z-30 p-4 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-gray-150 dark:border-slate-850 shadow-2xl flex items-center justify-between lg:hidden px-6 animate-in fade-in duration-200">
@@ -1130,13 +1473,19 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
             </div>
 
             {/* Bill Details */}
-            <div className="flex flex-col gap-1.5 animate-fade-in">
+            <div className="flex flex-col gap-1.5 animate-fade-in items-center">
               <h3 className="text-lg font-black tracking-tight text-gray-855 dark:text-slate-105 uppercase">
                 Bill Settled Successfully
               </h3>
               <p className="text-xs font-semibold text-gray-405 dark:text-slate-400">
                 Bill Number: #{settledBillData.billNumber.toString().padStart(6, '0')}
               </p>
+              {settledBillData.tableLabel && (
+                <div className="mt-1 px-3 py-1 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 rounded-full text-xs font-black flex items-center gap-1.5">
+                  <GitMerge size={12} />
+                  <span>Table: {settledBillData.tableLabel}</span>
+                </div>
+              )}
             </div>
 
             {/* Total Amount Card */}

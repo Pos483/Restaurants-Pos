@@ -20,6 +20,13 @@ export type OrderItem = {
   price?: number;
 };
 
+export type MergedTableSnapshot = {
+  tableId: number;
+  orders: OrderItem[];
+  customerName?: string;
+  customerPhone?: string;
+};
+
 export type Table = {
   id: number;
   status: 'available' | 'occupied';
@@ -27,6 +34,41 @@ export type Table = {
   tablePin?: string;
   customerName?: string;
   customerPhone?: string;
+  mergedTableIds?: number[];
+  mergedSnapshots?: MergedTableSnapshot[];
+};
+
+export const mergeOrderItems = (targetOrders: OrderItem[], sourceOrders: OrderItem[]): OrderItem[] => {
+  const result: OrderItem[] = targetOrders.map(o => ({
+    ...o,
+    menuItem: { ...o.menuItem }
+  }));
+
+  for (const src of sourceOrders) {
+    const srcId = src.menuItem?.id || src.name;
+    const existingIndex = result.findIndex(item => (item.menuItem?.id || item.name) === srcId);
+    const srcPrinted = src.printedQuantity !== undefined ? src.printedQuantity : (src.quantity || 0);
+
+    if (existingIndex > -1) {
+      const existing = result[existingIndex];
+      const newQty = (existing.quantity || 0) + (src.quantity || 0);
+      const newPrintedQty = (existing.printedQuantity || 0) + srcPrinted;
+      result[existingIndex] = {
+        ...existing,
+        quantity: newQty,
+        printedQuantity: Math.min(newPrintedQty, newQty)
+      };
+    } else {
+      result.push({
+        ...src,
+        menuItem: { ...src.menuItem },
+        quantity: src.quantity || 0,
+        printedQuantity: srcPrinted
+      });
+    }
+  }
+
+  return result;
 };
 
 export interface AppUser {
