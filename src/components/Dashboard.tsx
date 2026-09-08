@@ -333,33 +333,36 @@ export default function Dashboard() {
 
       // ── Khata Book Sync ────────────────────────────────────────────────────
       if (oldCreditAmount !== newCreditAmount) {
-         if (oldCreditAmount > 0) {
-            const oldPhone = editingPaymentBill.customerPhone || phone;
+         const oldPhone = editingPaymentBill.customerPhone || phone;
+         const formattedBillNum = editingPaymentBill.billNumber 
+            ? `#${editingPaymentBill.billNumber.toString().padStart(6, '0')}` 
+            : `#${editingPaymentBill.id.slice(-6)}`;
+
+         if (oldCreditAmount > newCreditAmount) {
+            // Customer paid part or all of the credit balance!
+            const paidAmount = oldCreditAmount - newCreditAmount;
             if (oldPhone) {
-                 const formattedBillNum = editingPaymentBill.billNumber 
-                    ? `#${editingPaymentBill.billNumber.toString().padStart(6, '0')}` 
-                    : `#${editingPaymentBill.id.slice(-6)}`;
                  const customNote = finalMethod.startsWith('Split') 
-                    ? `Payment received via Split for Bill ${formattedBillNum}`
-                    : `Payment received via ${finalMethod} for Bill ${formattedBillNum}`;
+                    ? `Payment received (₹${paidAmount.toFixed(2)}) via Split for Bill ${formattedBillNum}`
+                    : `Payment received (₹${paidAmount.toFixed(2)}) via ${finalMethod} for Bill ${formattedBillNum}`;
                 await revertCustomerCreditForBill(
                    editingPaymentBill.id,
                    oldPhone,
-                   oldCreditAmount,
+                   paidAmount,
                    editingPaymentBill.billNumber,
                    customNote
                 );
+                showToast(`Payment of ₹${paidAmount.toFixed(2)} recorded in Khata! ✅`);
             }
-         }
-         if (newCreditAmount > 0) {
+         } else if (newCreditAmount > oldCreditAmount) {
+            // Credit increased
+            const extraCredit = newCreditAmount - oldCreditAmount;
             if (phone) {
-               await recordCustomerCredit(name || 'Unknown Customer', phone, newCreditAmount, editingPaymentBill.id, editingPaymentBill.billNumber);
+               await recordCustomerCredit(name || 'Unknown Customer', phone, extraCredit, editingPaymentBill.id, editingPaymentBill.billNumber);
                showToast('Bill updated and Khata Book credit entry synced! ✅');
             } else {
                showToast('Bill updated but Khata Book could not be synced due to missing phone number.', 'info');
             }
-         } else {
-            showToast('Payment method updated successfully! ✅');
          }
       } else if (newCreditAmount > 0 && (editingPaymentBill.customerPhone !== phone || editingPaymentBill.customerName !== name)) {
          // Customer changed

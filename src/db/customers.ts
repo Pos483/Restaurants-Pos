@@ -241,6 +241,30 @@ export const deduplicateCustomerTransactions = async (customerId?: string) => {
       }
     }
 
+    // Heal any Payment Settle transactions that recorded full bill amount instead of split paid amount
+    for (const tx of sorted) {
+      if (tx.type === 'payment' && tx.relatedBillId && (tx.note?.includes('Payment received via Split') || tx.note?.includes('Payment received ('))) {
+        try {
+          const bill = await db.bills.get(tx.relatedBillId);
+          if (bill && bill.paymentMethod?.startsWith('Split')) {
+            const creditAmt = getCreditAmountForBill(bill);
+            const actualPaid = Math.max(0, bill.total - creditAmt);
+            if (actualPaid > 0 && Math.abs(tx.amount - actualPaid) > 0.01) {
+              console.log(`[DB] Correcting split repayment tx ${tx.id} from ₹${tx.amount} to actual paid ₹${actualPaid}`);
+              await db.customerTransactions.update(tx.id, {
+                amount: actualPaid,
+                note: `Payment received (₹${actualPaid.toFixed(2)}) via Split for Bill #${bill.billNumber ? bill.billNumber.toString().padStart(6, '0') : bill.id.slice(-6)}`
+              });
+              const updated = await db.customerTransactions.get(tx.id);
+              if (updated) {
+                await enqueueSync('customer_transactions', 'put', tx.id, updated);
+              }
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
     if (toDelete.length > 0) {
       console.log(`[DB] Cleaning up ${toDelete.length} duplicate customer transactions:`, toDelete);
       for (const id of toDelete) {
@@ -252,6 +276,21 @@ export const deduplicateCustomerTransactions = async (customerId?: string) => {
   } catch (err) {
     console.error('[DB] Error deduplicating customer transactions:', err);
   }
+};
+
+export const getCreditAmountForBill = (bill: any): number => {
+  if (!bill || !bill.paymentMethod) return 0;
+  if (bill.data?.status === 'cancelled') return 0;
+  if (bill.paymentMethod === 'Credit' || bill.paymentMethod === 'Udhar' || bill.paymentMethod === 'Unpaid') {
+    return bill.total;
+  }
+  if (bill.paymentMethod.startsWith('Split')) {
+    const creditMatch = bill.paymentMethod.match(/Credit:\s*₹?([\d.]+)/);
+    if (creditMatch && creditMatch[1]) {
+      return parseFloat(creditMatch[1]);
+    }
+  }
+  return 0;
 };
 
 export const recordCustomerCredit = async (name: string, phone: string, amount: number, billId?: string, billNumber?: number) => {
@@ -364,21 +403,6 @@ export const recordCustomerPayment = async (customerId: string, amount: number, 
     let remainingRepayment = amount;
     if (customer.phone) {
       const bills = await db.bills.where('customerPhone').equals(customer.phone).toArray();
-
-      // Helper to calculate credit portion of a bill
-      const getCreditAmountForBill = (bill: any): number => {
-        if (!bill.paymentMethod) return 0;
-        if (bill.paymentMethod === 'Credit' || bill.paymentMethod === 'Udhar' || bill.paymentMethod === 'Unpaid') {
-          return bill.total;
-        }
-        if (bill.paymentMethod.startsWith('Split')) {
-          const creditMatch = bill.paymentMethod.match(/Credit:\s*₹?([\d.]+)/);
-          if (creditMatch && creditMatch[1]) {
-            return parseFloat(creditMatch[1]);
-          }
-        }
-        return 0;
-      };
 
       // Helper to parse split components of a bill
       const parseSplitComponents = (splitStr: string) => {

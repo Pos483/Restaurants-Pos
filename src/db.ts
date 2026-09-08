@@ -47,6 +47,7 @@ export {
   upsertPosCustomer,
   mergeDuplicateCustomers,
   deduplicateCustomerTransactions,
+  getCreditAmountForBill,
   recordCustomerCredit,
   recordCustomerPayment,
   searchCustomersUnified,

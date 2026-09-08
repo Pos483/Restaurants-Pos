@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useLiveQuery, db, recordCustomerPayment, normalizePhone, mergeDuplicateCustomers, deduplicateCustomerTransactions } from '../db';
+import { useLiveQuery, db, recordCustomerPayment, normalizePhone, mergeDuplicateCustomers, deduplicateCustomerTransactions, getCreditAmountForBill } from '../db';
 import { UserPlus, IndianRupee, Printer, Clock, ArrowUpRight, ArrowDownLeft, User, Phone, ShieldAlert, CheckCircle2, XCircle } from 'lucide-react';
 import { useToast } from './Toast';
 import { ThermalPrinter } from '../printer';
@@ -134,7 +134,9 @@ export default function KhataBook({ initialCustomerId, initialCustomerPhone }: K
 
   const customerBills = useLiveQuery(async () => {
     if (!selectedCustomer?.phone) return [];
-    const results = await db.bills.where('customerPhone').equals(selectedCustomer.phone).toArray();
+    const cleanPhone = normalizePhone(selectedCustomer.phone);
+    const allBills = await db.bills.toArray();
+    const results = allBills.filter(b => b.customerPhone && normalizePhone(b.customerPhone) === cleanPhone);
     return results.sort((a, b) => b.timestamp - a.timestamp);
   }, [selectedCustomer?.phone], 'bills') || [];
 
@@ -400,19 +402,19 @@ export default function KhataBook({ initialCustomerId, initialCustomerPhone }: K
             <div className="w-full lg:w-72 bg-white dark:bg-slate-900/80 rounded-3xl shadow-md border border-gray-100 dark:border-slate-800/80 flex flex-col overflow-hidden transition-colors shrink-0">
               <div className="p-5 border-b border-gray-100 dark:border-slate-800 font-black text-sm uppercase text-gray-700 dark:text-slate-200 tracking-wider shrink-0 bg-gray-50/40 dark:bg-slate-900/20">Outstanding Bills</div>
               <div className="flex-1 overflow-auto p-4 flex flex-col gap-3">
-                {customerBills.filter(b => b.paymentMethod === 'Credit').length === 0 ? (
+                {customerBills.filter(b => b.data?.status !== 'cancelled' && getCreditAmountForBill(b) > 0).length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-center text-gray-300 dark:text-slate-700">
                     <ShieldAlert size={36} className="opacity-20" />
                     <p className="text-xs font-black mt-2">All bills are fully settled!</p>
                   </div>
                 ) : (
-                  customerBills.filter(b => b.paymentMethod === 'Credit').map(b => (
+                  customerBills.filter(b => b.data?.status !== 'cancelled' && getCreditAmountForBill(b) > 0).map(b => (
                     <div key={b.id} className="p-4 border border-red-100 dark:border-red-950/20 bg-gradient-to-r from-red-50/20 to-red-100/5 dark:from-red-950/10 dark:to-transparent rounded-2xl shadow-sm flex justify-between items-center transition-colors">
                       <div>
                         <div className="font-black text-gray-800 dark:text-slate-200 text-[13px]">Bill #{b.billNumber ? b.billNumber.toString().padStart(6, '0') : b.id.slice(-6)}</div>
                         <div className="text-xs text-gray-400 dark:text-slate-500 font-bold mt-1">{formatDate(b.timestamp)}</div>
                       </div>
-                      <div className="font-black text-sm text-red-500 dark:text-red-400">₹{b.total.toFixed(0)}</div>
+                      <div className="font-black text-sm text-red-500 dark:text-red-400">₹{getCreditAmountForBill(b).toFixed(0)}</div>
                     </div>
                   ))
                 )}
