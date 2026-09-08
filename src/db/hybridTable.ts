@@ -36,7 +36,13 @@ export class HybridTable<T extends BaseDBRecord> {
 
   async toArray(): Promise<T[]> {
     if (this.onlineOnly) {
-      if (!supabase || !navigator.onLine) return [];
+      if (!supabase || !navigator.onLine) {
+        try {
+          return await this.dexieTable.toArray();
+        } catch (_) {
+          return [];
+        }
+      }
       const userId = getUserId();
       if (!userId) return [];
 
@@ -63,6 +69,15 @@ export class HybridTable<T extends BaseDBRecord> {
         } else {
           break;
         }
+      }
+
+      if (allRows.length === 0) {
+        try {
+          const localFallback = await this.dexieTable.toArray();
+          if (localFallback.length > 0) {
+            return localFallback;
+          }
+        } catch (_) {}
       }
 
       return allRows.map(r => this.fromRow(r));
@@ -151,6 +166,9 @@ export class HybridTable<T extends BaseDBRecord> {
       if (error) {
         throw error;
       }
+      try {
+        await this.dexieTable.put(finalRecord);
+      } catch (_) {}
       notifyGlobalChange(this.tableName);
       return id;
     }
@@ -220,6 +238,9 @@ export class HybridTable<T extends BaseDBRecord> {
       if (error) {
         throw error;
       }
+      try {
+        await this.dexieTable.put(record);
+      } catch (_) {}
       notifyGlobalChange(this.tableName);
       return id;
     }
@@ -283,6 +304,9 @@ export class HybridTable<T extends BaseDBRecord> {
       if (error) {
         throw error;
       }
+      try {
+        await this.dexieTable.put(updatedRecord);
+      } catch (_) {}
       notifyGlobalChange(this.tableName);
       return 1;
     }
@@ -346,6 +370,9 @@ export class HybridTable<T extends BaseDBRecord> {
       if (error) {
         throw error;
       }
+      try {
+        await this.dexieTable.delete(id);
+      } catch (_) {}
       notifyGlobalChange(this.tableName);
       return;
     }
@@ -367,9 +394,30 @@ export class HybridTable<T extends BaseDBRecord> {
       if (r.id) locallyCreatedIds.add(String(r.id));
     });
 
-    if (!this.onlineOnly) {
-      await this.dexieTable.bulkPut(records);
+    if (this.onlineOnly) {
+      if (!supabase || !navigator.onLine) {
+        throw new Error("Internet is disconnected or the server is unavailable.");
+      }
+      const userId = getUserId();
+      if (!userId) {
+        throw new Error("No user is logged in. Cannot write to server.");
+      }
+      const rows = records.map(record => this.toRow(record, userId));
+      for (let i = 0; i < rows.length; i += 100) {
+        const chunk = rows.slice(i, i + 100);
+        const { error } = await supabase.from(this.tableName).upsert(chunk, { onConflict: 'app_user_id,id' });
+        if (error) {
+          throw new Error("Server bulk sync failed: " + error.message);
+        }
+      }
+      try {
+        await this.dexieTable.bulkPut(records);
+      } catch (_) {}
+      notifyGlobalChange(this.tableName);
+      return;
     }
+
+    await this.dexieTable.bulkPut(records);
     notifyGlobalChange(this.tableName);
 
     if (supabase && navigator.onLine) {
@@ -737,20 +785,23 @@ const posCustomersTable = new HybridTable<DBPosCustomer>(
 
 const staffTable = new HybridTable<DBStaff>(
   'staff',
-  (s, uid) => ({ app_user_id: uid, id: s.id, name: s.name, role: s.role, phone: s.phone, salary: s.salary, salary_type: s.salaryType, allowed_leaves: s.allowedLeaves ?? 4, status: s.status, joining_date: s.joiningDate || null, timestamp: s.timestamp, updated_at: new Date().toISOString() }),
-  (r) => ({ id: r.id, name: r.name, role: r.role, phone: r.phone, salary: Number(r.salary || 0), salaryType: r.salary_type || 'monthly', allowedLeaves: Number(r.allowed_leaves ?? 4), status: r.status || 'active', joiningDate: r.joining_date || undefined, timestamp: Number(r.timestamp) })
+  (s, uid) => ({ app_user_id: uid, id: s.id, name: s.name, role: s.role, phone: s.phone || null, salary: Number(s.salary || 0), salary_type: s.salaryType || 'monthly', allowed_leaves: Number(s.allowedLeaves ?? 4), status: s.status || 'active', joining_date: s.joiningDate || null, timestamp: s.timestamp || Date.now(), updated_at: new Date().toISOString() }),
+  (r) => ({ id: r.id, name: r.name, role: r.role, phone: r.phone || '', salary: Number(r.salary || 0), salaryType: r.salary_type || 'monthly', allowedLeaves: Number(r.allowed_leaves ?? 4), status: r.status || 'active', joiningDate: r.joining_date || undefined, timestamp: Number(r.timestamp) }),
+  true // onlineOnly: true
 );
 
 const staffAttendanceTable = new HybridTable<DBStaffAttendance>(
   'staff_attendance',
-  (a, uid) => ({ app_user_id: uid, id: a.id, staff_id: a.staffId, date: a.date, status: a.status, check_in_time: a.checkInTime || null, check_out_time: a.checkOutTime || null, note: a.note || null, timestamp: a.timestamp, updated_at: new Date().toISOString() }),
-  (r) => ({ id: r.id, staffId: r.staff_id, date: r.date, status: r.status, checkInTime: r.check_in_time || undefined, checkOutTime: r.check_out_time || undefined, note: r.note || undefined, timestamp: Number(r.timestamp) })
+  (a, uid) => ({ app_user_id: uid, id: a.id, staff_id: a.staffId, date: a.date, status: a.status || 'present', check_in_time: a.checkInTime || null, check_out_time: a.checkOutTime || null, note: a.note || null, timestamp: a.timestamp || Date.now(), updated_at: new Date().toISOString() }),
+  (r) => ({ id: r.id, staffId: r.staff_id, date: r.date, status: r.status || 'present', checkInTime: r.check_in_time || undefined, checkOutTime: r.check_out_time || undefined, note: r.note || undefined, timestamp: Number(r.timestamp) }),
+  true // onlineOnly: true
 );
 
 const staffAdvancesTable = new HybridTable<DBStaffAdvance>(
   'staff_advances',
-  (v, uid) => ({ app_user_id: uid, id: v.id, staff_id: v.staffId, amount: v.amount, date: v.date, type: v.type, payment_method: v.paymentMethod, note: v.note || null, timestamp: v.timestamp, updated_at: new Date().toISOString() }),
-  (r) => ({ id: r.id, staffId: r.staff_id, amount: Number(r.amount || 0), date: r.date, type: r.type, paymentMethod: r.payment_method, note: r.note || undefined, timestamp: Number(r.timestamp) })
+  (v, uid) => ({ app_user_id: uid, id: v.id, staff_id: v.staffId, amount: Number(v.amount || 0), date: v.date, type: v.type || 'advance', payment_method: v.paymentMethod || 'cash', note: v.note || null, timestamp: v.timestamp || Date.now(), updated_at: new Date().toISOString() }),
+  (r) => ({ id: r.id, staffId: r.staff_id, amount: Number(r.amount || 0), date: r.date, type: r.type || 'advance', paymentMethod: r.payment_method || 'cash', note: r.note || undefined, timestamp: Number(r.timestamp) }),
+  true // onlineOnly: true
 );
 
 export const db = {

@@ -173,6 +173,9 @@ export const syncLocalStaffToSupabase = async (userId?: string) => {
         }
       }
     }
+    notifyGlobalChange('staff');
+    notifyGlobalChange('staff_attendance');
+    notifyGlobalChange('staff_advances');
     logger.log('[DB] Local staff data synchronized with Supabase successfully.');
   } catch (err) {
     console.error('[syncLocalStaffToSupabase] Unexpected error:', err);

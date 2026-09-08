@@ -123,7 +123,7 @@ export default function RestaurantSettings() {
     onlineTakeawayEnabled: true
   });
 
-  const [appVersion, setAppVersion] = useState(import.meta.env.VITE_APP_VERSION || '3.4.6');
+  const [appVersion, setAppVersion] = useState(import.meta.env.VITE_APP_VERSION || '3.4.7');
 
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
 

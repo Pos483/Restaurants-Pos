@@ -1,12 +1,11 @@
-import { useState, useMemo } from 'react';
-import { useLiveQuery, db, syncLocalStaffToSupabase, pullTable, getUserId } from '../db';
+import { useState, useMemo, useEffect } from 'react';
+import { useLiveQuery, db, syncLocalStaffToSupabase } from '../db';
 import { DBStaff, DBStaffAttendance, DBStaffAdvance } from '../db/types';
 import {
   Users, UserPlus, Calendar, IndianRupee, CheckCircle2,
   Edit3, Trash2, Wallet, X,
   ChevronLeft, ChevronRight, Phone,
-  Receipt, Sparkles, Printer, Table2,
-  RefreshCw, Cloud
+  Receipt, Sparkles, Printer, Table2
 } from 'lucide-react';
 import { useToast } from './Toast';
 
@@ -58,35 +57,10 @@ export default function StaffManagement() {
   const [advMethod, setAdvMethod] = useState<'cash' | 'upi' | 'bank_transfer' | 'other'>('cash');
   const [advNote, setAdvNote] = useState<string>('');
 
-  // Cloud Sync state
-  const [isSyncing, setIsSyncing] = useState<boolean>(false);
-
-  const handleSyncWithCloud = async () => {
-    if (!navigator.onLine) {
-      showToast('⚠️ Internet is disconnected. Cannot sync with Supabase.', 'error');
-      return;
-    }
-    const userId = getUserId();
-    if (!userId) {
-      showToast('⚠️ No active user session found. Please log in first.', 'error');
-      return;
-    }
-    setIsSyncing(true);
-    try {
-      // 1. Upload any local records
-      await syncLocalStaffToSupabase(userId);
-      // 2. Pull remote records from Supabase
-      await pullTable('staff', userId);
-      await pullTable('staff_attendance', userId);
-      await pullTable('staff_advances', userId);
-      showToast('☁️ Staff data synced with Supabase successfully!');
-    } catch (err: any) {
-      console.error('Staff cloud sync failed:', err);
-      showToast(err?.message || '⚠️ Cloud sync encountered an error.', 'error');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
+  // Push any offline/legacy records to Supabase on mount for 100% Realtime Supabase data
+  useEffect(() => {
+    syncLocalStaffToSupabase();
+  }, []);
 
   // ── Database Queries ──────────────────────────────────────────────────────────
   const staffList = useLiveQuery(() => db.staff.toArray(), [], 'staff') || [];
@@ -678,7 +652,7 @@ export default function StaffManagement() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-slate-50/60 dark:bg-[#090D16] text-slate-900 dark:text-slate-100 overflow-hidden font-sans select-none transition-colors">
+    <div className="h-full flex flex-col bg-slate-50/60 dark:bg-[#090D16] text-slate-900 dark:text-slate-100 font-sans transition-colors rounded-3xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs overflow-hidden min-h-0">
       
       {/* ── TOP HEADER ───────────────────────────────────────────────────────── */}
       <div className="relative overflow-hidden bg-white dark:bg-slate-900/90 border-b border-slate-200/80 dark:border-slate-800/80 px-6 py-4.5 shrink-0 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
@@ -693,12 +667,8 @@ export default function StaffManagement() {
                 <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-slate-50">
                   Staff &amp; Attendance Management
                 </h1>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/50">
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/50">
                   {activeStaff.length} Active Staff
-                </span>
-                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/50">
-                  <Cloud size={11} className="stroke-[2.5]" />
-                  Supabase Connected
                 </span>
               </div>
               <p className="text-xs text-slate-400 dark:text-slate-500 font-semibold mt-0.5 flex items-center gap-1.5">
@@ -715,16 +685,6 @@ export default function StaffManagement() {
 
           {/* Top Quick Actions */}
           <div className="flex items-center gap-2.5">
-            <button
-              type="button"
-              onClick={handleSyncWithCloud}
-              disabled={isSyncing}
-              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 active:scale-95 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer disabled:opacity-60"
-              title="Sync staff, attendance, and advances with Supabase cloud"
-            >
-              <RefreshCw size={14} className={isSyncing ? "animate-spin text-indigo-500" : "text-slate-500"} />
-              <span>{isSyncing ? "Syncing..." : "Sync Cloud"}</span>
-            </button>
             <button
               onClick={() => openAdvanceModal()}
               className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition-all cursor-pointer border border-emerald-500/30"
@@ -743,7 +703,7 @@ export default function StaffManagement() {
         </div>
       </div>
 
-      {/* ── 5 NAVIGATION TABS ─────────────────────────────────────────────────── */}
+      {/* ── 5 NAVIGATION TABS (STICKY SUB-HEADER) ───────────────────────────── */}
       <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-md border-b border-slate-200/70 dark:border-slate-800/70 px-6 py-2.5 shrink-0">
         <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
           
@@ -814,9 +774,12 @@ export default function StaffManagement() {
         </div>
       </div>
 
-      {/* ── TAB 1: DAILY ATTENDANCE ──────────────────────────────────────────── */}
-      {activeTab === 'attendance' && (
-        <div className="flex-1 flex flex-col p-4 md:p-6 overflow-y-auto gap-4">
+      {/* ── SCROLLABLE CONTENT (ONLY STAFF DETAILS SCROLL — EXACTLY LIKE REPORTS TAB) ── */}
+      <div className="flex-1 overflow-auto p-4 md:p-6 pb-12 flex flex-col gap-4 min-h-0">
+
+        {/* ── TAB 1: DAILY ATTENDANCE ──────────────────────────────────────────── */}
+        {activeTab === 'attendance' && (
+          <div className="flex flex-col gap-4">
           
           {/* Clean Date Toolbar without icons in inputs */}
           <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
@@ -1067,9 +1030,9 @@ export default function StaffManagement() {
         </div>
       )}
 
-      {/* ── TAB 2: ATTENDANCE REGISTER ───────────────────────────────────────── */}
-      {activeTab === 'register' && (
-        <div className="flex-1 flex flex-col p-4 md:p-6 overflow-y-auto gap-4">
+        {/* ── TAB 2: ATTENDANCE REGISTER ───────────────────────────────────────── */}
+        {activeTab === 'register' && (
+          <div className="flex flex-col gap-4">
           
           {/* Month Navigator + Print Register Sheet Bar without input icons */}
           <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
@@ -1284,9 +1247,9 @@ export default function StaffManagement() {
         </div>
       )}
 
-      {/* ── TAB 3: STAFF DIRECTORY ──────────────────────────────────────────── */}
-      {activeTab === 'staff_list' && (
-        <div className="flex-1 flex flex-col p-4 md:p-6 overflow-y-auto gap-4">
+        {/* ── TAB 3: STAFF DIRECTORY ──────────────────────────────────────────── */}
+        {activeTab === 'staff_list' && (
+          <div className="flex flex-col gap-4">
           
           {/* Clean Search without icon inside */}
           <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -1388,9 +1351,9 @@ export default function StaffManagement() {
         </div>
       )}
 
-      {/* ── TAB 4: ADVANCE SALARY LEDGER ─────────────────────────────────────── */}
-      {activeTab === 'advances' && (
-        <div className="flex-1 flex flex-col p-4 md:p-6 overflow-y-auto gap-4">
+        {/* ── TAB 4: ADVANCE SALARY LEDGER ─────────────────────────────────────── */}
+        {activeTab === 'advances' && (
+          <div className="flex flex-col gap-4">
           
           <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
             <div>
@@ -1466,9 +1429,9 @@ export default function StaffManagement() {
         </div>
       )}
 
-      {/* ── TAB 5: MONTHLY SALARY PAYROLL ────────────────────────────────────── */}
-      {activeTab === 'payroll' && (
-        <div className="flex-1 flex flex-col p-4 md:p-6 overflow-y-auto gap-4">
+        {/* ── TAB 5: MONTHLY SALARY PAYROLL ────────────────────────────────────── */}
+        {activeTab === 'payroll' && (
+          <div className="flex flex-col gap-4">
           
           {/* Top Month Selector & KPI Metrics */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3.5">
@@ -1574,6 +1537,8 @@ export default function StaffManagement() {
           </div>
         </div>
       )}
+
+    </div>
 
       {/* ── MODAL: ADD / EDIT STAFF ─────────────────────────────────────────── */}
       {showAddStaffModal && (

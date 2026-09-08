@@ -375,7 +375,7 @@ export function AppLayout({
         </header>
 
         {/* Page content */}
-        <main className="flex-1 px-6 pt-6 pb-0 md:pb-6 overflow-y-auto h-full bg-[#FAFBFC] dark:bg-[#0B0F19] transition-colors duration-300">
+        <main className="flex-1 px-6 pt-6 pb-0 md:pb-6 overflow-y-auto h-full min-h-0 bg-[#FAFBFC] dark:bg-[#0B0F19] transition-colors duration-300">
           {children}
         </main>
 
