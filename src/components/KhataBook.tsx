@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useLiveQuery, db, recordCustomerPayment, normalizePhone, mergeDuplicateCustomers } from '../db';
+import { useLiveQuery, db, recordCustomerPayment, normalizePhone, mergeDuplicateCustomers, deduplicateCustomerTransactions } from '../db';
 import { UserPlus, IndianRupee, Printer, Clock, ArrowUpRight, ArrowDownLeft, User, Phone, ShieldAlert, CheckCircle2, XCircle } from 'lucide-react';
 import { useToast } from './Toast';
 import { ThermalPrinter } from '../printer';
@@ -24,7 +24,7 @@ export default function KhataBook({ initialCustomerId, initialCustomerPhone }: K
   const [newLimit, setNewLimit] = useState('10000');
 
 
-  // Run a self-healing merge sweep for duplicate customer phone numbers on component mount
+  // Run a self-healing merge sweep for duplicate customer phone numbers and duplicate transactions on component mount
   useEffect(() => {
     const runSweep = async () => {
       try {
@@ -45,6 +45,7 @@ export default function KhataBook({ initialCustomerId, initialCustomerPhone }: K
             await mergeDuplicateCustomers(phone);
           }
         }
+        await deduplicateCustomerTransactions();
       } catch (err) {
         console.error('[KhataBook] Failed to run database self-healing sweep:', err);
       }
@@ -107,7 +108,26 @@ export default function KhataBook({ initialCustomerId, initialCustomerPhone }: K
   const customerTransactions = useLiveQuery(async () => {
     if (!selectedCustomerId) return [];
     const results = await db.customerTransactions.where('customerId').equals(selectedCustomerId).toArray();
-    return results.sort((a, b) => b.timestamp - a.timestamp);
+    
+    // In-memory deduplication so UI and statements are always strictly unique
+    const seenTxIds = new Set<string>();
+    const seenBills = new Set<string>();
+    const seenSigs = new Set<string>();
+    const deduped = results.filter(t => {
+      if (seenTxIds.has(t.id)) return false;
+      seenTxIds.add(t.id);
+      if (t.type === 'credit' && t.relatedBillId) {
+        if (seenBills.has(t.relatedBillId)) return false;
+        seenBills.add(t.relatedBillId);
+      } else {
+        const sig = `${t.type}_${t.amount}_${Math.floor(t.timestamp / 60000)}`;
+        if (seenSigs.has(sig)) return false;
+        seenSigs.add(sig);
+      }
+      return true;
+    });
+
+    return deduped.sort((a, b) => b.timestamp - a.timestamp);
   }, [selectedCustomerId], 'customer_transactions') || [];
 
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId);

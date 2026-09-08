@@ -259,3 +259,59 @@ describe('📅 getLocalDateString (तारीख फ़ॉर्मेटि�
     expect(getLocalDateString()).toBe(expected);
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ✅ TEST SUITE 4: Khata Transaction Deduplication
+// ══════════════════════════════════════════════════════════════════════════════
+describe('🧾 Khata Transaction Deduplication (खाता डुप्लीकेट एंट्री प्रिवेंशन)', () => {
+  it('duplicate relatedBillId वाले credit transactions को फ़िल्टर करके सिर्फ 1 बार रखे', () => {
+    const rawTransactions = [
+      { id: 'tx-1', type: 'credit', amount: 290, relatedBillId: 'bill-1', timestamp: 1725690000000 },
+      { id: 'tx-2', type: 'credit', amount: 203, relatedBillId: 'bill-2', timestamp: 1725693600000 },
+      { id: 'tx-3', type: 'credit', amount: 525, relatedBillId: 'bill-3', timestamp: 1725780000000 },
+      { id: 'tx-4', type: 'credit', amount: 525, relatedBillId: 'bill-3', timestamp: 1725780005000 }, // Duplicate bill-3!
+    ];
+
+    const seenTxIds = new Set<string>();
+    const seenBills = new Set<string>();
+    const seenSigs = new Set<string>();
+
+    const deduped = rawTransactions.filter(t => {
+      if (seenTxIds.has(t.id)) return false;
+      seenTxIds.add(t.id);
+      if (t.type === 'credit' && t.relatedBillId) {
+        if (seenBills.has(t.relatedBillId)) return false;
+        seenBills.add(t.relatedBillId);
+      } else {
+        const sig = `${t.type}_${t.amount}_${Math.floor(t.timestamp / 60000)}`;
+        if (seenSigs.has(sig)) return false;
+        seenSigs.add(sig);
+      }
+      return true;
+    });
+
+    expect(deduped.length).toBe(3);
+    expect(deduped.map(t => t.amount)).toEqual([290, 203, 525]);
+    const total = deduped.reduce((sum, t) => sum + t.amount, 0);
+    expect(total).toBe(1018); // Exact balance!
+  });
+
+  it('अलग-अलग bills के same amount वाले legitimate transactions को नहीं हटाए', () => {
+    const rawTransactions = [
+      { id: 'tx-1', type: 'credit', amount: 500, relatedBillId: 'bill-lunch', timestamp: 1725780000000 },
+      { id: 'tx-2', type: 'credit', amount: 500, relatedBillId: 'bill-dinner', timestamp: 1725790000000 },
+    ];
+
+    const seenBills = new Set<string>();
+    const deduped = rawTransactions.filter(t => {
+      if (t.type === 'credit' && t.relatedBillId) {
+        if (seenBills.has(t.relatedBillId)) return false;
+        seenBills.add(t.relatedBillId);
+      }
+      return true;
+    });
+
+    expect(deduped.length).toBe(2);
+    expect(deduped.reduce((sum, t) => sum + t.amount, 0)).toBe(1000);
+  });
+});

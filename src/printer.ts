@@ -1,5 +1,5 @@
 import { OrderItem } from './types';
-import { db } from './db';
+import { db, normalizePhone } from './db';
 import { logger } from './utils/logger';
 import { getBillTranslations } from './i18n';
 import {
@@ -1216,14 +1216,17 @@ export class ThermalPrinter {
         let bills: any[] = [];
         if (customer.phone) {
           try {
-            bills = await db.bills.where('customerPhone').equals(customer.phone).toArray();
+            const cleanPhone = normalizePhone(customer.phone);
+            const allBills = await db.bills.toArray();
+            bills = allBills.filter(b => b.customerPhone && normalizePhone(b.customerPhone) === cleanPhone);
           } catch (e) {
             logger.error('Error fetching bills for customer statement:', e);
           }
         }
 
         const getCreditAmountForBill = (bill: any): number => {
-          if (!bill.paymentMethod) return 0;
+          if (!bill || !bill.paymentMethod) return 0;
+          if (bill.data?.status === 'cancelled') return 0;
           if (bill.paymentMethod === 'Credit' || bill.paymentMethod === 'Udhar' || bill.paymentMethod === 'Unpaid') {
             return bill.total;
           }
@@ -1236,16 +1239,45 @@ export class ThermalPrinter {
           return 0;
         };
 
-        chronologicalTransactions.forEach(t => {
-          if (t.type !== 'credit') return; // Do not print payment/repayment transactions
+        const seenBillIds = new Set<string>();
+        const seenTxIds = new Set<string>();
+        const seenSignatures = new Set<string>();
+
+        for (const t of chronologicalTransactions) {
+          if (t.type !== 'credit') continue; // Do not print payment/repayment transactions
           
+          // 1. Deduplicate by transaction ID
+          if (t.id) {
+            if (seenTxIds.has(t.id)) continue;
+            seenTxIds.add(t.id);
+          }
+
+          // 2. Deduplicate by relatedBillId
+          if (t.relatedBillId) {
+            if (seenBillIds.has(t.relatedBillId)) continue;
+            seenBillIds.add(t.relatedBillId);
+          } else {
+            // 3. Deduplicate unlinked transactions with identical amount and minute timestamp
+            const sig = `${t.type}_${t.amount}_${Math.floor(t.timestamp / 60000)}`;
+            if (seenSignatures.has(sig)) continue;
+            seenSignatures.add(sig);
+          }
+
           let amt = t.amount;
           if (t.relatedBillId) {
-            const bill = bills.find(b => b.id === t.relatedBillId);
+            let bill = bills.find(b => b.id === t.relatedBillId);
+            if (!bill) {
+              try {
+                bill = await db.bills.get(t.relatedBillId);
+              } catch (_) {}
+            }
             if (bill) {
+              if (bill.data?.status === 'cancelled') {
+                continue; // Skip cancelled bills
+              }
               const outstandingAmt = getCreditAmountForBill(bill);
               if (outstandingAmt <= 0) {
-                return; // Skip fully settled bills
+                continue; // Skip fully settled bills
               }
               amt = outstandingAmt; // Show remaining unpaid portion
             }
@@ -1255,7 +1287,7 @@ export class ThermalPrinter {
           const type = 'Debt';
           const amtStr = amt.toFixed(2).padStart(6);
           print += `${date} - ${type}: Rs ${amtStr}\n`;
-        });
+        }
         print += separator;
         print += CENTER + 'Please settle pending balance.\n*** Thank You ***\n\n\n\n' + CUT;
 

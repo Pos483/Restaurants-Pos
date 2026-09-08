@@ -164,6 +164,10 @@ export const mergeDuplicateCustomers = async (phone: string): Promise<DBCustomer
     console.log(`[DB] Merging ${list.length} duplicate customers for phone: ${cleanPhone}`);
     let mergedBalance = mainCustomer.balance || 0;
     
+    // Fetch main customer's existing transactions to prevent duplicate re-assignment
+    const mainTransactions = await db.customerTransactions.where('customerId').equals(mainCustomer.id).toArray();
+    const existingBillIds = new Set(mainTransactions.filter(t => t.relatedBillId && t.type === 'credit').map(t => t.relatedBillId));
+
     for (let i = 1; i < list.length; i++) {
       const dup = list[i];
       mergedBalance += (dup.balance || 0);
@@ -171,10 +175,19 @@ export const mergeDuplicateCustomers = async (phone: string): Promise<DBCustomer
       // 1. Point all transactions of the duplicate customer to the main customer
       const transactions = await db.customerTransactions.where('customerId').equals(dup.id).toArray();
       for (const tx of transactions) {
+        if (tx.relatedBillId && tx.type === 'credit' && existingBillIds.has(tx.relatedBillId)) {
+          // Main customer already has this bill transaction, avoid duplicate
+          await db.customerTransactions.delete(tx.id);
+          await enqueueSync('customer_transactions', 'delete', tx.id, null);
+          continue;
+        }
         await db.customerTransactions.update(tx.id, { customerId: mainCustomer.id });
         const updatedTx = await db.customerTransactions.get(tx.id);
         if (updatedTx) {
           await enqueueSync('customer_transactions', 'put', tx.id, updatedTx);
+        }
+        if (tx.relatedBillId && tx.type === 'credit') {
+          existingBillIds.add(tx.relatedBillId);
         }
       }
 
@@ -191,9 +204,54 @@ export const mergeDuplicateCustomers = async (phone: string): Promise<DBCustomer
     if (updatedMain) {
       await enqueueSync('customers', 'put', mainCustomer.id, updatedMain);
     }
+    await deduplicateCustomerTransactions(mainCustomer.id);
   }
 
   return mainCustomer;
+};
+
+export const deduplicateCustomerTransactions = async (customerId?: string) => {
+  try {
+    const transactions = customerId 
+      ? await db.customerTransactions.where('customerId').equals(customerId).toArray()
+      : await db.customerTransactions.toArray();
+
+    const seenBillMap = new Map<string, string>(); // customerId_billId -> first tx id
+    const seenSigMap = new Map<string, string>(); // sig -> first tx id
+    const toDelete: string[] = [];
+
+    // Sort oldest first so we preserve original transaction
+    const sorted = [...transactions].sort((a, b) => a.timestamp - b.timestamp);
+
+    for (const tx of sorted) {
+      if (tx.type === 'credit' && tx.relatedBillId) {
+        const key = `${tx.customerId}_${tx.relatedBillId}`;
+        if (seenBillMap.has(key)) {
+          toDelete.push(tx.id);
+          continue;
+        }
+        seenBillMap.set(key, tx.id);
+      } else {
+        const sig = `${tx.customerId}_${tx.type}_${tx.amount}_${Math.floor(tx.timestamp / 60000)}`;
+        if (seenSigMap.has(sig)) {
+          toDelete.push(tx.id);
+          continue;
+        }
+        seenSigMap.set(sig, tx.id);
+      }
+    }
+
+    if (toDelete.length > 0) {
+      console.log(`[DB] Cleaning up ${toDelete.length} duplicate customer transactions:`, toDelete);
+      for (const id of toDelete) {
+        await db.customerTransactions.delete(id);
+        await enqueueSync('customer_transactions', 'delete', id, null);
+      }
+      notifyGlobalChange('customer_transactions');
+    }
+  } catch (err) {
+    console.error('[DB] Error deduplicating customer transactions:', err);
+  }
 };
 
 export const recordCustomerCredit = async (name: string, phone: string, amount: number, billId?: string, billNumber?: number) => {
@@ -202,6 +260,43 @@ export const recordCustomerCredit = async (name: string, phone: string, amount: 
   const cleanName = name.trim();
 
   try {
+    let billNumberStr = '';
+    if (billNumber) {
+       billNumberStr = ` for Bill #${billNumber.toString().padStart(6, '0')}`;
+    } else if (billId) {
+       billNumberStr = ` for Bill #${billId.slice(-6)}`;
+    }
+
+    // 0. Check if a credit transaction for this billId already exists anywhere in the database
+    if (billId) {
+      const existingTxs = await db.customerTransactions
+        .where('relatedBillId')
+        .equals(billId)
+        .toArray();
+      const existingCreditTx = existingTxs.find(tx => tx.type === 'credit');
+      if (existingCreditTx) {
+        // If amount matches, it is an exact duplicate settlement call - skip cleanly
+        if (existingCreditTx.amount === amount) {
+          console.log(`[recordCustomerCredit] Credit transaction for bill ${billId} already recorded. Skipping duplicate.`);
+          return;
+        }
+        // If amount changed (e.g. edited bill in dashboard), adjust balance and transaction amount
+        const diff = amount - (existingCreditTx.amount || 0);
+        let customer = await mergeDuplicateCustomers(cleanPhone);
+        if (customer) {
+          const newBal = Math.max(0, (customer.balance || 0) + diff);
+          await db.customers.update(customer.id, { balance: newBal });
+          await db.customerTransactions.update(existingCreditTx.id, {
+            amount,
+            note: `Bill settlement via Credit${billNumberStr}`
+          });
+          notifyGlobalChange('customers');
+          notifyGlobalChange('customer_transactions');
+        }
+        return;
+      }
+    }
+
     // 1. Find or merge customer by phone
     let customer = await mergeDuplicateCustomers(cleanPhone);
 
@@ -235,13 +330,6 @@ export const recordCustomerCredit = async (name: string, phone: string, amount: 
         timestamp: Date.now()
       };
       await db.customers.put(customer);
-    }
-
-    let billNumberStr = '';
-    if (billNumber) {
-       billNumberStr = ` for Bill #${billNumber.toString().padStart(6, '0')}`;
-    } else if (billId) {
-       billNumberStr = ` for Bill #${billId.slice(-6)}`;
     }
 
     // 2. Add a credit transaction log

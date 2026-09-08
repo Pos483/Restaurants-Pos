@@ -46,6 +46,7 @@ export {
   getPosCustomerByPhone,
   upsertPosCustomer,
   mergeDuplicateCustomers,
+  deduplicateCustomerTransactions,
   recordCustomerCredit,
   recordCustomerPayment,
   searchCustomersUnified,
