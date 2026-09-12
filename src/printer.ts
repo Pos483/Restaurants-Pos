@@ -1170,7 +1170,124 @@ export class ThermalPrinter {
     });
   }
 
+  static async printCounterCashSlip(data: any, settings: any) {
+    const printerMode = settings?.printerMode || 'single';
+    const activePort = printerMode === 'multiple' ? this.receiptPort : (this.port || this.receiptPort);
+    if (!activePort) throw new Error('Receipt Printer not connected');
+
+    return this.enqueuePort(activePort, async () => {
+      if (activePort.writable.locked) {
+        await new Promise<void>((resolve, reject) => {
+          const startTime = Date.now();
+          const check = setInterval(() => {
+            if (!activePort.writable.locked) {
+              clearInterval(check);
+              resolve();
+            } else if (Date.now() - startTime > 5000) {
+              clearInterval(check);
+              reject(new Error('Printer Port Lock Timeout'));
+            }
+          }, 50);
+        });
+      }
+
+      const width = settings?.printerWidth || 32;
+      const encoder = new TextEncoder();
+      const writer = activePort.writable.getWriter();
+
+      try {
+        let report = INIT + '\n';
+        const restaurantName = (settings?.restaurantName || 'RESTAURANT POS').toUpperCase();
+        report += CENTER + BOLD_ON + DOUBLE_HEIGHT_ON + 'COUNTER CASH & COIN\n' + BOLD_OFF + DOUBLE_HEIGHT_OFF;
+        report += CENTER + BOLD_ON + 'CLOSING SLIP\n' + BOLD_OFF;
+        report += CENTER + `${restaurantName}\n`;
+
+        const separator = '-'.repeat(width) + '\n';
+        report += separator;
+        report += LEFT + BOLD_ON + `Date: ${data.date}\n` + BOLD_OFF;
+        if (data.cashierName) {
+          report += LEFT + `Cashier: ${data.cashierName}\n`;
+        }
+        report += `Time: ${new Date(data.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}\n`;
+        report += separator;
+
+        // Big Notes (Owner Pickup)
+        report += LEFT + BOLD_ON + '--- BIG NOTES (OWNER PICKUP) ---\n' + BOLD_OFF;
+        const notes = [
+          { label: '500 Note', count: data.notes500, val: 500 },
+          { label: '200 Note', count: data.notes200, val: 200 },
+          { label: '100 Note', count: data.notes100, val: 100 },
+          { label: ' 50 Note', count: data.notes50, val: 50 },
+        ];
+        notes.forEach(n => {
+          if (n.count > 0) {
+            const lineLeft = `${n.label} x ${n.count}`;
+            const lineRight = `Rs ${(n.count * n.val).toFixed(0)}`;
+            const space = Math.max(1, width - lineLeft.length - lineRight.length);
+            report += `${lineLeft}${' '.repeat(space)}${lineRight}\n`;
+          }
+        });
+        report += BOLD_ON + `Big Notes Total : Rs ${Number(data.bigNotesTotal || 0).toFixed(0)}\n` + BOLD_OFF;
+        report += BOLD_ON + `OWNER TAKEAWAY  : Rs ${Number(data.ownerWithdrawal || 0).toFixed(0)}\n` + BOLD_OFF;
+        report += separator;
+
+        // Small Notes & Coins (Counter Float)
+        report += LEFT + BOLD_ON + '--- SMALL NOTES & COINS ---\n' + BOLD_OFF;
+        report += LEFT + '(LEFT IN COUNTER FOR CHANGE)\n';
+        const smallCurrency = [
+          { label: ' 20 Note', count: data.notes20, val: 20 },
+          { label: ' 10 Note', count: data.notes10, val: 10 },
+          { label: '  5 Note', count: data.notes5, val: 5 },
+          { label: ' 20 Coin', count: data.coins20, val: 20 },
+          { label: ' 10 Coin', count: data.coins10, val: 10 },
+          { label: '  5 Coin', count: data.coins5, val: 5 },
+          { label: '  2 Coin', count: data.coins2, val: 2 },
+          { label: '  1 Coin', count: data.coins1, val: 1 },
+        ];
+        smallCurrency.forEach(c => {
+          if (c.count > 0) {
+            const lineLeft = `${c.label} x ${c.count}`;
+            const lineRight = `Rs ${(c.count * c.val).toFixed(0)}`;
+            const space = Math.max(1, width - lineLeft.length - lineRight.length);
+            report += `${lineLeft}${' '.repeat(space)}${lineRight}\n`;
+          }
+        });
+        report += BOLD_ON + `COUNTER FLOAT   : Rs ${Number(data.counterClosingFloat || 0).toFixed(0)}\n` + BOLD_OFF;
+        report += separator;
+
+        // Grand Summary
+        report += CENTER + BOLD_ON + DOUBLE_HEIGHT_ON + `TOTAL CASH: Rs ${Number(data.totalCash || 0).toFixed(0)}\n` + BOLD_OFF + DOUBLE_HEIGHT_OFF;
+        if (data.expectedCash !== undefined && data.expectedCash !== null) {
+          report += separator;
+          report += LEFT + `Expected Cash   : Rs ${Number(data.expectedCash).toFixed(0)}\n`;
+          const diff = Number(data.discrepancy || 0);
+          const diffStatus = diff === 0 ? 'TALLY MATCH (Rs 0)' : diff > 0 ? `SURPLUS (+Rs ${diff.toFixed(0)})` : `SHORTAGE (-Rs ${Math.abs(diff).toFixed(0)})`;
+          report += BOLD_ON + `Difference      : ${diffStatus}\n` + BOLD_OFF;
+        }
+
+        if (data.notes) {
+          report += separator;
+          report += LEFT + `Note: ${data.notes}\n`;
+        }
+
+        report += separator;
+        report += '\nSignatures:\n\n';
+        report += 'Owner: _________  Cashier: _________\n';
+        report += '\n\n\n' + CUT;
+
+        await writeWithTimeout(writer, encoder.encode(report));
+        return true;
+      } catch (err) {
+        logger.error('Counter Cash Slip Print Error:', err);
+        throw err;
+      } finally {
+        try { writer.releaseLock(); } catch (e) {}
+      }
+    });
+  }
+
   static async printKhataStatement(customer: any, transactions: any[], settings: any) {
+
     const printerMode = settings?.printerMode || 'single';
     const activePort = printerMode === 'multiple' ? this.receiptPort : (this.port || this.receiptPort);
     if (!activePort) throw new Error('Printer not connected');

@@ -221,4 +221,29 @@ export interface DBStaffAdvance extends BaseDBRecord {
   timestamp: number;
 }
 
-
+export interface DBCounterCash extends BaseDBRecord {
+  id: string;
+  date: string; // YYYY-MM-DD
+  timestamp: number;
+  cashierName?: string;
+  notes500: number;
+  notes200: number;
+  notes100: number;
+  notes50: number;
+  notes20: number;
+  notes10: number;
+  notes5: number;
+  coins20: number;
+  coins10: number;
+  coins5: number;
+  coins2: number;
+  coins1: number;
+  totalCash: number;
+  bigNotesTotal: number;
+  smallNotesCoinsTotal: number;
+  ownerWithdrawal: number;
+  counterClosingFloat: number;
+  expectedCash?: number;
+  discrepancy?: number;
+  notes?: string;
+}

@@ -116,8 +116,9 @@ localDb.version(7).stores({
   staff_advances: 'id, staffId, date, type'
 });
 
-
-
+localDb.version(8).stores({
+  counter_cash: 'id, date, timestamp, cashierName'
+});
 
 import { useLiveQuery as dexieUseLiveQuery } from 'dexie-react-hooks';
 

@@ -19,7 +19,8 @@ import {
   DBSelfOrder,
   DBStaff,
   DBStaffAttendance,
-  DBStaffAdvance
+  DBStaffAdvance,
+  DBCounterCash
 } from './types';
 
 export class HybridTable<T extends BaseDBRecord> {
@@ -804,6 +805,66 @@ const staffAdvancesTable = new HybridTable<DBStaffAdvance>(
   true // onlineOnly: true
 );
 
+const counterCashTable = new HybridTable<DBCounterCash>(
+  'counter_cash',
+  (c, uid) => ({
+    app_user_id: uid,
+    id: c.id,
+    date: c.date,
+    timestamp: c.timestamp,
+    cashier_name: c.cashierName || null,
+    notes_500: c.notes500 || 0,
+    notes_200: c.notes200 || 0,
+    notes_100: c.notes100 || 0,
+    notes_50: c.notes50 || 0,
+    notes_20: c.notes20 || 0,
+    notes_10: c.notes10 || 0,
+    notes_5: c.notes5 || 0,
+    coins_20: c.coins20 || 0,
+    coins_10: c.coins10 || 0,
+    coins_5: c.coins5 || 0,
+    coins_2: c.coins2 || 0,
+    coins_1: c.coins1 || 0,
+    total_cash: c.totalCash || 0,
+    big_notes_total: c.bigNotesTotal || 0,
+    small_notes_coins_total: c.smallNotesCoinsTotal || 0,
+    owner_withdrawal: c.ownerWithdrawal || 0,
+    counter_closing_float: c.counterClosingFloat || 0,
+    expected_cash: c.expectedCash ?? null,
+    discrepancy: c.discrepancy ?? null,
+    notes: c.notes || null,
+    updated_at: new Date().toISOString()
+  }),
+  (r) => ({
+    id: r.id,
+    date: r.date,
+    timestamp: Number(r.timestamp),
+    cashierName: r.cashier_name || undefined,
+    notes500: Number(r.notes_500 || 0),
+    notes200: Number(r.notes_200 || 0),
+    notes100: Number(r.notes_100 || 0),
+    notes50: Number(r.notes_50 || 0),
+    notes20: Number(r.notes_20 || 0),
+    notes10: Number(r.notes_10 || 0),
+    notes5: Number(r.notes_5 || 0),
+    coins20: Number(r.coins_20 || 0),
+    coins10: Number(r.coins_10 || 0),
+    coins5: Number(r.coins_5 || 0),
+    coins2: Number(r.coins_2 || 0),
+    coins1: Number(r.coins_1 || 0),
+    totalCash: Number(r.total_cash || 0),
+    bigNotesTotal: Number(r.big_notes_total || 0),
+    smallNotesCoinsTotal: Number(r.small_notes_coins_total || 0),
+    ownerWithdrawal: Number(r.owner_withdrawal || 0),
+    counterClosingFloat: Number(r.counter_closing_float || 0),
+    expectedCash: r.expected_cash !== null && r.expected_cash !== undefined ? Number(r.expected_cash) : undefined,
+    discrepancy: r.discrepancy !== null && r.discrepancy !== undefined ? Number(r.discrepancy) : undefined,
+    notes: r.notes || undefined
+  }),
+  true // onlineOnly: true
+);
+
+
 export const db = {
   bills: billsTable,
   menuItems: menuItemsTable,
@@ -822,6 +883,7 @@ export const db = {
   staff: staffTable,
   staffAttendance: staffAttendanceTable,
   staffAdvances: staffAdvancesTable,
+  counterCash: counterCashTable,
   deletedRecords: { add: async () => {}, toArray: async () => [] } as unknown as HybridTable<BaseDBRecord>,
 };
 
@@ -846,7 +908,9 @@ export const getTable = (tableName: string): HybridTable<BaseDBRecord> | undefin
     case 'staff': return db.staff as unknown as HybridTable<BaseDBRecord>;
     case 'staff_attendance': return db.staffAttendance as unknown as HybridTable<BaseDBRecord>;
     case 'staff_advances': return db.staffAdvances as unknown as HybridTable<BaseDBRecord>;
+    case 'counter_cash': return db.counterCash as unknown as HybridTable<BaseDBRecord>;
     default: return undefined;
   }
 };
+
 

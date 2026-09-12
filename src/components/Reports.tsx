@@ -16,7 +16,8 @@ import {
   Layers, 
   Wallet, 
   Printer, 
-  XCircle
+  XCircle,
+  Coins
 } from 'lucide-react';
 import { escapeHtml } from '../utils/escapeHtml';
 import {
@@ -30,6 +31,7 @@ import DailyTab from './reports/DailyTab';
 import ItemsTab from './reports/ItemsTab';
 import BillsTab from './reports/BillsTab';
 import ExpensesTab from './reports/ExpensesTab';
+import CounterCashTab from './reports/CounterCashTab';
 
 export default function Reports() {
   const [billsPage, setBillsPage] = useState(1);
@@ -425,6 +427,7 @@ export default function Reports() {
   const tabs = [
     { id: 'summary', label: 'Overview', icon: <BarChart3 size={15} /> },
     { id: 'closing', label: 'Closing Report', icon: <Receipt size={15} /> },
+    { id: 'counter_cash', label: 'Counter Cash / Coin', icon: <Coins size={15} /> },
     { id: 'day_wise', label: 'Day Performance', icon: <CalendarDays size={15} /> },
     { id: 'expenses', label: 'Expenses', icon: <Wallet size={15} /> },
     { id: 'daily', label: 'Daily', icon: <CalendarDays size={15} /> },
@@ -627,6 +630,16 @@ export default function Reports() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* ═══ TAB: COUNTER CASH & COIN CLOSING ═══ */}
+        {activeTab === 'counter_cash' && (
+          <CounterCashTab
+            bills={filteredBills}
+            rangeExpenses={rangeExpenses}
+            selectedDate={startDate}
+            globalSettings={globalSettings}
+          />
         )}
 
         {/* ═══ TAB: DAY PERFORMANCE (WEEKDAY AGGREGATION) ═══ */}

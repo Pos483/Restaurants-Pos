@@ -270,7 +270,8 @@ export const clearAllLocalTables = async () => {
     'print_queue',
     'staff',
     'staff_attendance',
-    'staff_advances'
+    'staff_advances',
+    'counter_cash'
   ];
   for (const table of tables) {
     try {
