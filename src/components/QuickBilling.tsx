@@ -212,6 +212,18 @@ export default function QuickBilling() {
       }
     }
 
+    // Pre-check if KOT printer is connected
+    let printerConnected = await ThermalPrinter.isKOTPrinterConnected();
+    if (!printerConnected) {
+      await ThermalPrinter.autoConnect();
+      printerConnected = await ThermalPrinter.isKOTPrinterConnected();
+    }
+
+    if (!printerConnected) {
+      showToast('⚠️ Printer connect nahi hai! KOT print karne ke liye kripya pehle printer connect karein.', 'error');
+      return;
+    }
+
     isPrintingRef.current = true;
     if (cart.length === 0 || isPrinting) { isPrintingRef.current = false; return; }
     setIsPrinting(true);
@@ -247,7 +259,7 @@ export default function QuickBilling() {
       
       if (printSuccess) {
         setPendingKotNum(null);
-        showToast(`KOT #${kotNum} Sent to Kitchen`);
+        showToast(`KOT #${kotNum} Sent to Kitchen & Printed`, 'success');
         
         const isCloudPrintSendingEnabled = localStorage.getItem('enableCloudPrintSending') !== 'false';
         await db.kdsOrders.add({
@@ -265,12 +277,11 @@ export default function QuickBilling() {
           printedQuantity: o.quantity
         })));
       } else {
-        setPendingKdsData({ newItemsToPrint, kotNum });
-        setShowKdsConfirm(true);
+        showToast('⚠️ KOT print nahi ho saka. Kripya printer check karein.', 'error');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('KOT Print Error:', error);
-      showToast('KOT failed to save', 'error');
+      showToast(error?.message || '⚠️ Printer error! KOT print nahi ho saka.', 'error');
     } finally {
       isPrintingRef.current = false;
       setIsPrinting(false);
@@ -338,7 +349,7 @@ export default function QuickBilling() {
       // Get atomic next bill number sequence
       const currentSeq = await getNextBillNumber();
 
-      const isCloudPrintSendingEnabled = localStorage.getItem('enableCloudPrintSending') !== 'false';
+      const isCloudPrintSendingEnabled = shouldPrint && (localStorage.getItem('enableCloudPrintSending') !== 'false');
       const billTimestamp = Date.now();
       const billId = billTimestamp.toString() + (isCloudPrintSendingEnabled ? '' : '-nocp');
       await db.bills.add({
@@ -354,7 +365,7 @@ export default function QuickBilling() {
         discount: discountVal,
         customerName,
         customerPhone,
-        data: { orderType }
+        data: { orderType, shouldPrint }
       });
 
       await deductStockForBill(billId, cart, currentSeq);

@@ -148,7 +148,7 @@ export default function Billing({ tables, onSettleBill }: Props) {
       // Get atomic next bill number sequence
       const currentSeq = await getNextBillNumber();
 
-      const isCloudPrintSendingEnabled = localStorage.getItem('enableCloudPrintSending') !== 'false';
+      const isCloudPrintSendingEnabled = shouldPrint && (localStorage.getItem('enableCloudPrintSending') !== 'false');
       const billTimestamp = Date.now();
       const billId = billTimestamp.toString() + (isCloudPrintSendingEnabled ? '' : '-nocp');
       await db.bills.add({
@@ -163,7 +163,8 @@ export default function Billing({ tables, onSettleBill }: Props) {
         billNumber: currentSeq,
         discount: discountVal,
         customerName,
-        customerPhone
+        customerPhone,
+        data: { shouldPrint }
       });
 
       await deductStockForBill(billId, selectedTable.orders, currentSeq);

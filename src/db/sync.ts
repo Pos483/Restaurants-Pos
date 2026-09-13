@@ -309,7 +309,13 @@ export const setupRealtime = (userId: string) => {
               const recordId = String(localRecord.id);
               const existing = await dexieTable.get(recordId);
               const isCloudPrintReceivingEnabled = localStorage.getItem('enableCloudPrintReceiving') !== 'false';
-              if (!existing && !locallyCreatedIds.has(recordId) && !String(recordId).endsWith('-nocp') && isCloudPrintReceivingEnabled) {
+              if (
+                !existing &&
+                !locallyCreatedIds.has(recordId) &&
+                !String(recordId).endsWith('-nocp') &&
+                (localRecord as any)?.data?.shouldPrint !== false &&
+                isCloudPrintReceivingEnabled
+              ) {
                 isNewFromOtherDevice = true;
               }
             }

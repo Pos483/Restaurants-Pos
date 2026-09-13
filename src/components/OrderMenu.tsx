@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Table, OrderItem, MenuItem, mergeOrderItems, MergedTableSnapshot } from '../types';
-import { DBMenuItem, DBCategory, db, getNextKotNumber, deductStockForBill, recordCustomerCredit, normalizePhone, getNextBillNumber, upsertPosCustomer, searchCustomersUnified, findCustomerByPhone, CustomerSearchResult } from '../db';
+import { DBMenuItem, DBCategory, db, getNextKotNumber, deductStockForBill, recordCustomerCredit, normalizePhone, getNextBillNumber, upsertPosCustomer, findCustomerByPhone } from '../db';
 import { useLiveQuery } from '../db';
 import { Plus, Minus, Star, UserPlus, Tag, Printer, ArrowLeft, Trash2, ChevronLeft, ChevronRight, X, CheckCircle, GitMerge, Undo2 } from 'lucide-react';
 import { trackEvent } from '../utils/analytics';
@@ -48,23 +48,6 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
   const [mergeTargetTableId, setMergeTargetTableId] = useState<number | null>(null);
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'UPI' | 'Card' | 'Credit' | 'Unpaid'>('Cash');
-  const [creditCustomerPhone, setCreditCustomerPhone] = useState('');
-  const [creditCustomerName, setCreditCustomerName] = useState('');
-  const [activeCreditCustomerField, setActiveCreditCustomerField] = useState<'name' | 'phone'>('name');
-  const [creditCustomerSuggestions, setCreditCustomerSuggestions] = useState<CustomerSearchResult[]>([]);
-
-  useEffect(() => {
-    const autofillCredit = async () => {
-      const clean = normalizePhone(creditCustomerPhone);
-      if (clean.length === 10) {
-        const match = await findCustomerByPhone(clean);
-        if (match && match.name) {
-          setCreditCustomerName(match.name);
-        }
-      }
-    };
-    autofillCredit();
-  }, [creditCustomerPhone]);
 
   useEffect(() => {
     const autofillStandard = async () => {
@@ -78,24 +61,6 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
     };
     autofillStandard();
   }, [customerPhone]);
-
-  useEffect(() => {
-    if (paymentMethod !== 'Credit') {
-      setCreditCustomerSuggestions([]);
-      return;
-    }
-    const fetchSuggestions = async () => {
-      try {
-        const query = activeCreditCustomerField === 'name' ? creditCustomerName : creditCustomerPhone;
-        const list = await searchCustomersUnified(query, 6);
-        setCreditCustomerSuggestions(list);
-      } catch (err) {
-        console.error('Error fetching credit customer suggestions:', err);
-      }
-    };
-
-    fetchSuggestions();
-  }, [creditCustomerName, creditCustomerPhone, activeCreditCustomerField, paymentMethod]);
   const [showKdsConfirm, setShowKdsConfirm] = useState<boolean>(false);
   const [pendingKdsData, setPendingKdsData] = useState<{ newItemsToPrint: OrderItem[], kotNum: string } | null>(null);
   const [localOrders, setLocalOrders] = useState<OrderItem[]>([]);
@@ -189,8 +154,6 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
     setDiscountAmount('');
     setDiscountType('amount');
     setPaymentMethod('Cash');
-    setCreditCustomerName('');
-    setCreditCustomerPhone('');
     setPendingKotNum(null);
     setShowCustomer(false);
     setShowDiscount(false);
@@ -503,8 +466,9 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
 
   const handlePrintAndSettle = async (shouldPrint: boolean = true) => {
     flushPendingUpdate();
-    if (paymentMethod === 'Credit' && (!creditCustomerName.trim() || !creditCustomerPhone.trim())) {
-      showToast('Credit customer name and phone are required.', 'error');
+    if (paymentMethod === 'Credit' && (!customerName.trim() || !customerPhone.trim())) {
+      showToast('Customer name and phone number are required for Credit (Udhar) bills!', 'error');
+      setShowCustomer(true);
       return;
     }
     if (isSettleInProgress.current) return;
@@ -525,7 +489,15 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
 
       // Pre-check credit limit before committing anything
       if (paymentMethod === 'Credit') {
-        const creditPhone = normalizePhone(creditCustomerPhone);
+        const creditPhone = normalizePhone(customerPhone);
+        const creditName = (customerName || '').trim();
+        if (!creditPhone || !creditName) {
+          showToast('Customer name and phone number are required for Credit settlement', 'error');
+          setShowCustomer(true);
+          isSettleInProgress.current = false;
+          setIsPrinting(false);
+          return;
+        }
         const existingCustomers = await db.customers.where('phone').equals(creditPhone).toArray();
         if (existingCustomers.length > 0) {
           const existing = existingCustomers[0];
@@ -533,11 +505,15 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
           const projectedBalance = (existing.balance || 0) + finalTotal;
           if (projectedBalance > limit) {
             showToast(`Credit limit exceeded! Current balance: ₹${existing.balance || 0}, Limit: ₹${limit}`, 'error');
+            isSettleInProgress.current = false;
+            setIsPrinting(false);
             return;
           }
         } else {
           if (finalTotal > 10000) {
             showToast('New customer credit limit cannot exceed ₹10,000', 'error');
+            isSettleInProgress.current = false;
+            setIsPrinting(false);
             return;
           }
         }
@@ -546,12 +522,9 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
       // Get atomic next bill number sequence
       const currentSeq = await getNextBillNumber();
 
-      const isCloudPrintSendingEnabled = localStorage.getItem('enableCloudPrintSending') !== 'false';
+      const isCloudPrintSendingEnabled = shouldPrint && (localStorage.getItem('enableCloudPrintSending') !== 'false');
       const billTimestamp = Date.now();
       const billId = billTimestamp.toString() + (isCloudPrintSendingEnabled ? '' : '-nocp');
-      const isCredit = paymentMethod === 'Credit';
-      const actualCustomerName = isCredit ? creditCustomerName : customerName;
-      const actualCustomerPhone = isCredit ? creditCustomerPhone : customerPhone;
 
       const mergedIds = getEffectiveMergedIds(table);
       const isMerged = mergedIds.length > 0;
@@ -568,25 +541,26 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
         timestamp: billTimestamp,
         billNumber: currentSeq,
         discount: discountVal,
-        customerName: actualCustomerName,
-        customerPhone: actualCustomerPhone,
+        customerName: customerName || undefined,
+        customerPhone: customerPhone || undefined,
         data: {
           mergedTableIds: mergedIds,
           primaryTableId: table.id,
+          shouldPrint: shouldPrint
         }
       });
 
       await deductStockForBill(billId, localOrders, currentSeq);
 
       // Save/update customer in POS customer directory
-      if (actualCustomerName.trim() && actualCustomerPhone.trim()) {
-        await upsertPosCustomer(actualCustomerName.trim(), actualCustomerPhone.trim(), finalTotal);
+      if (customerName.trim() && customerPhone.trim()) {
+        await upsertPosCustomer(customerName.trim(), customerPhone.trim(), finalTotal);
       }
 
       if (paymentMethod === 'Credit') {
         await recordCustomerCredit(
-          creditCustomerName,
-          creditCustomerPhone,
+          customerName,
+          customerPhone,
           finalTotal,
           billId,
           currentSeq
@@ -595,7 +569,7 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
 
       if (shouldPrint) {
         try {
-          await ThermalPrinter.printReceipt(billTableId, localOrders, subtotal, tax, finalTotal, paymentMethod, currentSeq, globalSettings, discountVal, actualCustomerName, actualCustomerPhone, billTimestamp);
+          await ThermalPrinter.printReceipt(billTableId, localOrders, subtotal, tax, finalTotal, paymentMethod, currentSeq, globalSettings, discountVal, customerName, customerPhone, billTimestamp);
         } catch (printErr) {
           console.error('Printing failed, but saving/settling bill:', printErr);
         }
@@ -613,8 +587,6 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
       setCustomerName('');
       setCustomerPhone('');
       setPaymentMethod('Cash');
-      setCreditCustomerPhone('');
-      setCreditCustomerName('');
     } catch (error) {
       console.error('Print/Settle Error:', error);
       showToast('Settlement failed. Please try again.', 'error');
@@ -683,6 +655,18 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
       }
     }
 
+    // Pre-check if KOT printer is connected
+    let printerConnected = await ThermalPrinter.isKOTPrinterConnected();
+    if (!printerConnected) {
+      await ThermalPrinter.autoConnect();
+      printerConnected = await ThermalPrinter.isKOTPrinterConnected();
+    }
+
+    if (!printerConnected) {
+      showToast('⚠️ Printer connect nahi hai! KOT print karne ke liye kripya pehle printer connect karein.', 'error');
+      return;
+    }
+
     isPrintingRef.current = true;
     setIsPrinting(true);
     try {
@@ -692,55 +676,56 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
         quantity: o.quantity - (o.printedQuantity || 0)
       })).filter(o => o.quantity > 0);
 
-      if (newItemsToPrint.length > 0) {
-        let kotNum = pendingKotNum;
-        if (!kotNum) {
-          kotNum = await getNextKotNumber();
-          setPendingKotNum(kotNum);
-        }
-        const isMergedTable = effectiveMergedIds.length > 0;
-        const kotTableLabel = isMergedTable ? `${table.id} (+${effectiveMergedIds.join(', ')})` : table.id;
-        const printSuccess = await ThermalPrinter.printKOT(kotTableLabel, newItemsToPrint, kotNum);
-        
-        if (printSuccess) {
-          setPendingKotNum(null);
-          showToast(`KOT #${kotNum} Sent to Kitchen`);
-          
-          // Add to Live Kitchen Display (KDS)
-          const isCloudPrintSendingEnabled = localStorage.getItem('enableCloudPrintSending') !== 'false';
-          await db.kdsOrders.add({
-            id: Date.now().toString() + (isCloudPrintSendingEnabled ? '' : '-nocp'),
-            tableOrType: isMergedTable ? `Table ${table.id} (+${effectiveMergedIds.join(', ')})` : `Table ${table.id}`,
-            items: newItemsToPrint,
-            timestamp: Date.now(),
-            status: 'pending',
-            kotNumber: kotNum
-          });
-          
-          // Update printed quantities and status
-          const updatedOrders = localOrders.map(o => ({
-            ...o,
-            printedQuantity: o.quantity
-          }));
-
-          // Update local state and background database
-          setLocalOrders(updatedOrders);
-
-          const updates: any = { orders: updatedOrders };
-          if (table.status !== 'occupied') {
-            updates.status = 'occupied';
-          }
-          
-          await db.activeOrders.update(table.id, updates);
-        } else {
-          setPendingKdsData({ newItemsToPrint, kotNum });
-          setShowKdsConfirm(true);
-        }
-      } else {
+      if (newItemsToPrint.length === 0) {
         showToast('All items have already been printed. Use KDS to re-print.', 'info');
+        return;
       }
-    } catch (e) {
+
+      let kotNum = pendingKotNum;
+      if (!kotNum) {
+        kotNum = await getNextKotNumber();
+        setPendingKotNum(kotNum);
+      }
+      const isMergedTable = effectiveMergedIds.length > 0;
+      const kotTableLabel = isMergedTable ? `${table.id} (+${effectiveMergedIds.join(', ')})` : table.id;
+      const printSuccess = await ThermalPrinter.printKOT(kotTableLabel, newItemsToPrint, kotNum);
+      
+      if (printSuccess) {
+        setPendingKotNum(null);
+        showToast(`KOT #${kotNum} Sent to Kitchen & Printed`, 'success');
+        
+        // Add to Live Kitchen Display (KDS)
+        const isCloudPrintSendingEnabled = localStorage.getItem('enableCloudPrintSending') !== 'false';
+        await db.kdsOrders.add({
+          id: Date.now().toString() + (isCloudPrintSendingEnabled ? '' : '-nocp'),
+          tableOrType: isMergedTable ? `Table ${table.id} (+${effectiveMergedIds.join(', ')})` : `Table ${table.id}`,
+          items: newItemsToPrint,
+          timestamp: Date.now(),
+          status: 'pending',
+          kotNumber: kotNum
+        });
+        
+        // Update printed quantities and status
+        const updatedOrders = localOrders.map(o => ({
+          ...o,
+          printedQuantity: o.quantity
+        }));
+
+        // Update local state and background database
+        setLocalOrders(updatedOrders);
+
+        const updates: any = { orders: updatedOrders };
+        if (table.status !== 'occupied') {
+          updates.status = 'occupied';
+        }
+        
+        await db.activeOrders.update(table.id, updates);
+      } else {
+        showToast('⚠️ KOT print nahi ho saka. Kripya printer check karein.', 'error');
+      }
+    } catch (e: any) {
       console.error('KOT Error:', e);
+      showToast(e?.message || '⚠️ Printer error! KOT print nahi ho saka.', 'error');
     } finally {
       setIsPrinting(false);
       isPrintingRef.current = false;
@@ -1065,8 +1050,8 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
             >
               {showMobileCart ? <X size={20} /> : <ArrowLeft size={20} />}
             </button>
-            <div className="flex items-center gap-2 truncate flex-1 min-w-0">
-              <h2 className="text-lg font-bold text-gray-800 dark:text-slate-200 truncate" title={`Table ${table.id}`}>Table {table.id}</h2>
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <h2 className="text-lg font-black text-gray-800 dark:text-slate-200 whitespace-nowrap" title={`Table ${table.id}`}>Table {table.id}</h2>
               {isMerged && (
                 <span className="text-[10px] font-black text-amber-700 bg-amber-100/90 dark:text-amber-300 dark:bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-300/40 dark:border-amber-800/50 flex items-center gap-1 shrink-0" title={`Merged with Table ${effectiveMergedIds.join(', ')}`}>
                   <GitMerge size={10} />
@@ -1075,30 +1060,17 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                setMergeTargetTableId(table.id);
-                setShowMergeModal(true);
-              }}
-              className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 dark:text-amber-300 text-xs font-bold rounded-lg border border-amber-200/60 dark:border-amber-800/50 transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer shadow-xs active:scale-95"
-              title="Merge another table into this bill"
-            >
-              <GitMerge size={14} />
-              <span className="hidden sm:inline">{isMerged ? 'Merge More' : 'Merge Table'}</span>
-            </button>
-
             {localOrders.length > 0 && (
               <button 
                 onClick={() => setShowClearConfirm(true)}
-                className="p-1.5 text-red-500 hover:bg-red-55 rounded-lg transition-colors ml-1 dark:text-red-400 dark:hover:bg-red-950/30 shrink-0"
+                className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors dark:text-red-400 dark:hover:bg-red-950/30 shrink-0"
                 title="Clear Cart"
               >
                 <Trash2 size={18} />
               </button>
             )}
           </div>
-          <span className={`px-2 py-1 rounded-md text-xs font-bold shrink-0 ml-2 ${table.status === 'occupied' ? 'bg-orange-100 text-orange-600 dark:bg-orange-950/45 dark:text-orange-400 dark:border dark:border-orange-900/40' : 'bg-green-100 text-green-600 dark:bg-green-950/45 dark:text-green-400 dark:border dark:border-green-900/40'}`}>
+          <span className={`px-2.5 py-1 rounded-md text-xs font-black shrink-0 ml-2 uppercase tracking-wide ${table.status === 'occupied' ? 'bg-orange-100 text-orange-600 dark:bg-orange-950/45 dark:text-orange-400 dark:border dark:border-orange-900/40' : 'bg-green-100 text-green-600 dark:bg-green-950/45 dark:text-green-400 dark:border dark:border-green-900/40'}`}>
             {table.status.toUpperCase()}
           </span>
         </div>
@@ -1137,7 +1109,7 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
           </div>
         )}
 
-        <div className="flex-1 overflow-auto p-5">
+        <div className="flex-1 overflow-y-auto p-4 min-h-0">
           {localOrders.length === 0 ? (
             <div className="text-gray-400 text-center mt-10 font-medium dark:text-slate-500">No items added yet.</div>
           ) : (
@@ -1166,7 +1138,7 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
           )}
         </div>
 
-        <div className="p-4 border-t bg-gray-50 dark:bg-[#1e293b]/30 dark:border-slate-800/80">
+        <div className="p-4 border-t bg-gray-50 dark:bg-[#1e293b]/30 dark:border-slate-800/80 shrink-0">
           {table.status === 'occupied' && (
             <div className="mb-4 flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-slate-800">
               <div className="flex gap-2">
@@ -1238,12 +1210,18 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
                 {(['Cash', 'UPI', 'Card', 'Credit', 'Unpaid'] as const).map(m => (
                   <button
                     key={m}
-                    onClick={() => setPaymentMethod(m)}
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethod(m);
+                      if (m === 'Credit' && (!customerName.trim() || !customerPhone.trim())) {
+                        setShowCustomer(true);
+                      }
+                    }}
                     className={`py-3 rounded-lg text-[10px] sm:text-xs font-semibold transition-colors whitespace-nowrap text-center flex items-center justify-center px-1 ${
                       paymentMethod === m
                         ? m === 'Credit' || m === 'Unpaid'
-                          ? 'bg-red-500 text-white'
-                          : 'bg-blue-600 text-white'
+                          ? 'bg-red-500 text-white shadow-sm'
+                          : 'bg-blue-600 text-white shadow-sm'
                         : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                     }`}
                   >
@@ -1251,58 +1229,10 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
                   </button>
                 ))}
               </div>
-              {paymentMethod === 'Credit' && (
-                <div className="flex flex-col gap-2 mb-3">
-                  <input
-                    type="text"
-                    placeholder="Customer Name"
-                    value={creditCustomerName}
-                    onChange={e => {
-                      setCreditCustomerName(e.target.value);
-                      setActiveCreditCustomerField('name');
-                    }}
-                    onFocus={() => setActiveCreditCustomerField('name')}
-                    className="w-full px-3 py-2 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm border border-gray-200 dark:border-gray-600 focus:outline-none focus:border-blue-500 transition-colors placeholder-gray-400 dark:placeholder-gray-500"
-                  />
-                  <input
-                    type="tel"
-                    placeholder="Customer Phone (10 digits)"
-                    value={creditCustomerPhone}
-                    onChange={e => {
-                      setCreditCustomerPhone(e.target.value);
-                      setActiveCreditCustomerField('phone');
-                    }}
-                    onFocus={() => setActiveCreditCustomerField('phone')}
-                    className="w-full px-3 py-2 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm border border-gray-200 dark:border-gray-600 focus:outline-none focus:border-blue-500 transition-colors placeholder-gray-400 dark:placeholder-gray-500"
-                  />
-                  
-                  {/* Suggestions List inline */}
-                  {creditCustomerSuggestions.length > 0 && (
-                    <div className="border border-gray-100 dark:border-slate-700 rounded-xl overflow-hidden flex flex-col bg-gray-50 dark:bg-slate-900 divide-y divide-gray-200 dark:divide-slate-800 max-h-[140px] overflow-y-auto shadow-inner mt-1">
-                      <div className="px-2.5 py-1 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest bg-gray-100 dark:bg-slate-900">
-                        {creditCustomerName || creditCustomerPhone ? 'Matching Saved Customers' : 'Recent Customers (Quick Select)'}
-                      </div>
-                      {creditCustomerSuggestions.map(c => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => {
-                            setCreditCustomerName(c.name);
-                            setCreditCustomerPhone(c.phone);
-                            setCreditCustomerSuggestions([]);
-                          }}
-                          className="px-3 py-2 text-left hover:bg-gray-100 dark:hover:bg-slate-800 flex justify-between items-center text-xs font-bold text-gray-700 dark:text-slate-300 transition-colors w-full"
-                        >
-                          <span>{c.name}</span>
-                          <span className="text-gray-400 dark:text-slate-500 font-semibold">{c.phone}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+
               <div className="flex gap-2 w-full">
                 <button
+                   type="button"
                    onClick={() => handlePrintAndSettle(false)}
                    disabled={isPrinting || localOrders.length === 0}
                    className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs text-center flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-md"
@@ -1310,9 +1240,10 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
                    Save Bill
                 </button>
                 <button
+                   type="button"
                    onClick={() => handlePrintAndSettle(true)}
                    disabled={isPrinting || localOrders.length === 0}
-                   className="flex-[2] py-3.5 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 dark:bg-green-600 dark:hover:bg-green-700"
+                   className="flex-[2] py-3.5 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 dark:bg-green-600 dark:hover:bg-green-700 cursor-pointer active:scale-95"
                 >
                    <Printer size={14} /> {isPrinting ? 'Printing...' : 'Settle & Print'}
                 </button>

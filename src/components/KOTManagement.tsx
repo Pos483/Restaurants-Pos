@@ -2,13 +2,30 @@ import { useState, useEffect } from 'react';
 import { useLiveQuery, db, DBKdsOrder } from '../db';
 import { ChefHat, Clock, CheckCircle2, PlayCircle, CheckCheck, History, Trash2, XCircle, Printer, Calendar } from 'lucide-react';
 import { ThermalPrinter } from '../printer';
+import { useToast } from './Toast';
 import ConfirmModal from './ConfirmModal';
 
 export default function KOTManagement() {
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'active' | 'completed'>('active');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [cancellingKot, setCancellingKot] = useState<DBKdsOrder | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState<boolean>(false);
+  const [isPrinterConnected, setIsPrinterConnected] = useState<boolean>(ThermalPrinter.isKOTConnectedSync());
+
+  useEffect(() => {
+    let isMounted = true;
+    const checkPrinter = async () => {
+      const conn = await ThermalPrinter.isKOTPrinterConnected();
+      if (isMounted) setIsPrinterConnected(conn);
+    };
+    checkPrinter();
+    const interval = setInterval(checkPrinter, 3000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   // Get all KOTs from database
   const allKots = useLiveQuery(() => db.kdsOrders.toArray(), [], 'kds_orders');
@@ -40,18 +57,53 @@ export default function KOTManagement() {
 
   const executeCancelKot = async () => {
     if (!cancellingKot) return;
+    const targetKot = cancellingKot;
+    setCancellingKot(null); // Instantly close modal so popup never freezes or hangs
+
     try {
-      await db.kdsOrders.update(cancellingKot.id, { status: 'cancelled' });
-      await ThermalPrinter.printCancelKOT(cancellingKot.tableOrType, cancellingKot.kotNumber, cancellingKot.items).catch(console.error);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setCancellingKot(null);
+      // 1. Mark KOT as cancelled in database
+      await db.kdsOrders.update(targetKot.id, { status: 'cancelled' });
+
+      // 2. Check printer connection and print cancel slip if available
+      const printerConnected = await ThermalPrinter.isKOTPrinterConnected();
+      if (printerConnected) {
+        try {
+          const printed = await ThermalPrinter.printCancelKOT(targetKot.tableOrType, targetKot.kotNumber, targetKot.items);
+          if (printed) {
+            showToast(`KOT #${targetKot.kotNumber} cancelled & slip printed.`, 'success');
+          } else {
+            showToast(`KOT #${targetKot.kotNumber} cancelled. (Slip print skipped)`, 'info');
+          }
+        } catch (pErr) {
+          console.error('Cancel KOT slip print error:', pErr);
+          showToast(`KOT #${targetKot.kotNumber} cancelled. (Slip print failed)`, 'info');
+        }
+      } else {
+        showToast(`KOT #${targetKot.kotNumber} cancelled. (Printer connect nahi hai, slip print nahi hui)`, 'info');
+      }
+    } catch (err: any) {
+      console.error('Failed to cancel KOT:', err);
+      showToast(err?.message || 'Failed to cancel KOT', 'error');
     }
   };
 
   const handleReprintKot = async (kot: DBKdsOrder) => {
-    await ThermalPrinter.printKOT(kot.tableOrType, kot.items, kot.kotNumber);
+    let printerConnected = await ThermalPrinter.isKOTPrinterConnected();
+    if (!printerConnected) {
+      await ThermalPrinter.autoConnect();
+      printerConnected = await ThermalPrinter.isKOTPrinterConnected();
+    }
+    if (!printerConnected) {
+      showToast('⚠️ Printer connect nahi hai! KOT reprint karne ke liye kripya printer connect karein.', 'error');
+      return;
+    }
+    try {
+      await ThermalPrinter.printKOT(kot.tableOrType, kot.items, kot.kotNumber);
+      showToast(`KOT #${kot.kotNumber} reprint sent to printer.`, 'success');
+    } catch (err: any) {
+      console.error('Reprint KOT failed:', err);
+      showToast(err?.message || 'Failed to reprint KOT', 'error');
+    }
   };
 
   const handleClearCompleted = () => {
@@ -91,6 +143,12 @@ export default function KOTManagement() {
             <button onClick={() => setActiveTab('completed')} className={`px-6 py-2 font-bold rounded-lg transition-all flex items-center gap-2 ${activeTab === 'completed' ? 'bg-white dark:bg-slate-700 text-gray-800 dark:text-white shadow-sm dark:shadow-none' : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'}`}>
               <History size={16} /> Completed
             </button>
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+            <span className={`w-2 h-2 rounded-full ${isPrinterConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+            <span className={isPrinterConnected ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}>
+              {isPrinterConnected ? 'Printer Online' : 'Printer Offline'}
+            </span>
           </div>
           <div className="h-8 w-px bg-gray-200 dark:bg-slate-700 mx-2 hidden sm:block"></div>
           <div className="flex items-center gap-2 px-3">
@@ -271,7 +329,12 @@ export default function KOTManagement() {
       <ConfirmModal
         isOpen={cancellingKot !== null}
         title="Cancel KOT"
-        message={cancellingKot ? `Are you sure you want to cancel KOT #${cancellingKot.kotNumber} for ${cancellingKot.tableOrType}?` : ''}
+        message={
+          cancellingKot
+            ? `Are you sure you want to cancel KOT #${cancellingKot.kotNumber} for ${cancellingKot.tableOrType}?` +
+              (!isPrinterConnected ? '\n\n⚠️ Note: Printer connect nahi hai. KOT KDS se cancel ho jayega lekin cancel slip print nahi hogi.' : '')
+            : ''
+        }
         onConfirm={executeCancelKot}
         onCancel={() => setCancellingKot(null)}
       />

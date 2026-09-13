@@ -4,6 +4,12 @@ import { DBPrintJob, DBBill, DBKdsOrder } from './types';
 
 export async function enqueuePrintJob(type: 'bills' | 'kds_orders', record: any) {
   try {
+    if (type === 'bills') {
+      if (record?.data?.shouldPrint === false || String(record?.id).endsWith('-nocp')) {
+        logger.log('[PrintQueue] Skipping enqueue for bill saved without print:', record?.billNumber);
+        return;
+      }
+    }
     const job: DBPrintJob = {
       id: record.id || crypto.randomUUID(),
       type,
@@ -144,6 +150,10 @@ export async function handleCloudAutoPrint(table: string, record: any) {
 
     if (table === 'bills') {
       const b = record as DBBill;
+      if (b?.data?.shouldPrint === false || String(b?.id).endsWith('-nocp')) {
+        logger.log('[CloudPrint] Skipping bill print because shouldPrint is false or has -nocp:', b.billNumber);
+        return;
+      }
       // Skip printing if the bill is older than 2 minutes
       const timeDiff = Math.abs(Date.now() - b.timestamp);
       if (timeDiff > 120000) {

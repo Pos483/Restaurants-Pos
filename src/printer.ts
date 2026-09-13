@@ -18,6 +18,23 @@ export class ThermalPrinter {
   static get isKOTConnected() { return !!this.kotPort; }
   static get isBarConnected() { return !!this.barPort; }
 
+  static isKOTConnectedSync(): boolean {
+    return !!(this.port || this.kotPort || this.barPort);
+  }
+
+  static async isKOTPrinterConnected(): Promise<boolean> {
+    try {
+      const settings = (await Promise.all([db.restaurantProfile.get('global'), db.restaurantSettings.get('global')])).reduce((a, b) => ({ ...(a || {}), ...(b || {}) }), {}) as any;
+      const printerMode = settings?.printerMode || 'single';
+      if (printerMode === 'multiple') {
+        return !!(this.kotPort || this.barPort);
+      }
+      return !!(this.port || this.kotPort);
+    } catch {
+      return !!(this.port || this.kotPort);
+    }
+  }
+
   private static btDevices = new Map<string, any>();
   private static btCharacteristics = new Map<string, any>();
 
@@ -994,12 +1011,18 @@ export class ThermalPrinter {
         if (port) prints.push(this._printCancelKOTToPort(port, tableId, barItems, kotNumber, settings));
       }
 
-      if (prints.length === 0) throw new Error('KOT Printer not connected');
+      if (prints.length === 0) {
+        logger.warn('[Printer] No KOT printer connected for cancel slip');
+        return false;
+      }
       await Promise.all(prints);
       return true;
     } else {
       const activePort = this.port || this.kotPort;
-      if (!activePort) throw new Error('KOT Printer not connected');
+      if (!activePort) {
+        logger.warn('[Printer] No KOT printer connected for cancel slip');
+        return false;
+      }
       return this._printCancelKOTToPort(activePort, tableId, items, kotNumber, settings);
     }
   }
@@ -1078,7 +1101,7 @@ export class ThermalPrinter {
         return true;
       } catch (err) {
         logger.error('Cancel KOT Print Error:', err);
-        throw err;
+        return false;
       } finally {
         try { writer.releaseLock(); } catch (e) {}
       }
