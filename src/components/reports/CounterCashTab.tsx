@@ -393,7 +393,7 @@ export default function CounterCashTab({
             <h2 className="text-xl font-black tracking-tight">Counter Cash & Coin Closing Register</h2>
           </div>
           <p className="text-xs text-purple-200/80 font-medium mt-1.5 max-w-2xl leading-relaxed">
-            Night closing cash drawer tally (गल्ला क्लोजिंग): Separate large notes (<strong>₹500, ₹200, ₹100, ₹50</strong>) for the owner pickup, and preserve small notes & coins (<strong>₹20, ₹10, ₹5 notes + coins</strong>) in the counter for next morning's opening float.
+            Night closing cash drawer tally (गल्ला क्लोजिंग): Separate large notes (<strong>₹500, ₹200, ₹100, ₹50</strong>) for the owner pickup, and preserve small notes &amp; coins (<strong>₹20, ₹10, ₹5 notes + coins</strong>) in the counter for next morning's opening float.
           </p>
         </div>
 
@@ -741,37 +741,37 @@ export default function CounterCashTab({
                         </span>
                       </div>
 
-                      <div className="flex items-center justify-between gap-1 mt-1">
-                        <button
-                          type="button"
-                          onClick={() => decrementCount(key)}
-                          disabled={count <= 0}
-                          className="w-6 h-6 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-300 flex items-center justify-center disabled:opacity-30"
-                        >
-                          <Minus size={10} />
-                        </button>
-                        <input
-                          type="number"
-                          min="0"
-                          value={count === 0 ? '' : count}
-                          placeholder="0"
-                          onChange={(e) => handleCountChange(key, parseInt(e.target.value, 10))}
-                          className="w-10 h-6 text-center text-xs font-black bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded-lg text-gray-800 dark:text-slate-100 focus:outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => incrementCount(key)}
-                          className="w-6 h-6 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center"
-                        >
-                          <Plus size={10} />
-                        </button>
-                      </div>
+                    <div className="flex items-center justify-between gap-1 mt-1">
+                      <button
+                        type="button"
+                        onClick={() => decrementCount(key)}
+                        disabled={count <= 0}
+                        className="w-6 h-6 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-300 flex items-center justify-center disabled:opacity-30"
+                      >
+                        <Minus size={10} />
+                      </button>
+                      <input
+                        type="number"
+                        min="0"
+                        value={count === 0 ? '' : count}
+                        placeholder="0"
+                        onChange={(e) => handleCountChange(key, parseInt(e.target.value, 10))}
+                        className="w-10 h-6 text-center text-xs font-black bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded-lg text-gray-800 dark:text-slate-100 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => incrementCount(key)}
+                        className="w-6 h-6 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center"
+                      >
+                        <Plus size={10} />
+                      </button>
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
+        </div>
         </div>
 
         {/* Right 1 Col: Closing Form, Details & Save */}
@@ -911,7 +911,7 @@ export default function CounterCashTab({
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50/50 dark:bg-slate-900/20 text-gray-400 font-bold text-xs uppercase tracking-wider border-b border-gray-100 dark:border-slate-800">
-                  <th className="py-3 px-4">Date & Time</th>
+                  <th className="py-3 px-4">Date &amp; Time</th>
                   <th className="py-3 px-4">Cashier</th>
                   <th className="py-3 px-4 text-right">Total Counted</th>
                   <th className="py-3 px-4 text-right text-amber-600 dark:text-amber-400">Owner Took</th>
