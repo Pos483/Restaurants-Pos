@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
-import { useLiveQuery, db, syncLocalStaffToSupabase } from '../db';
+import { useState, useMemo } from 'react';
+import { useLiveQuery, db } from '../db';
 import { DBStaff, DBStaffAttendance, DBStaffAdvance } from '../db/types';
 import {
   Users, UserPlus, Calendar, IndianRupee, CheckCircle2,
@@ -57,10 +57,6 @@ export default function StaffManagement() {
   const [advMethod, setAdvMethod] = useState<'cash' | 'upi' | 'bank_transfer' | 'other'>('cash');
   const [advNote, setAdvNote] = useState<string>('');
 
-  // Push any offline/legacy records to Supabase on mount for 100% Realtime Supabase data
-  useEffect(() => {
-    syncLocalStaffToSupabase();
-  }, []);
 
   // ── Database Queries ──────────────────────────────────────────────────────────
   const staffList = useLiveQuery(() => db.staff.toArray(), [], 'staff') || [];
@@ -467,12 +463,26 @@ export default function StaffManagement() {
   };
 
   const handleDeleteStaff = async (staffId: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to deactivate ${name}?`)) return;
+    if (!window.confirm(`Are you sure you want to permanently delete ${name}?`)) return;
     try {
-      await db.staff.update(staffId, { status: 'inactive' });
-      showToast(`🗑️ ${name} deactivated.`);
-    } catch (err) {
-      showToast('⚠️ Failed to delete staff.', 'error');
+      await db.staff.delete(staffId);
+
+      // Also clean up any associated attendance and advance records
+      try {
+        const atts = await db.staffAttendance.toArray();
+        for (const a of atts.filter(a => a.staffId === staffId)) {
+          await db.staffAttendance.delete(a.id);
+        }
+        const advs = await db.staffAdvances.toArray();
+        for (const v of advs.filter(v => v.staffId === staffId)) {
+          await db.staffAdvances.delete(v.id);
+        }
+      } catch (_) {}
+
+      showToast(`🗑️ ${name} deleted successfully.`, 'success');
+    } catch (err: any) {
+      console.error('Error deleting staff:', err);
+      showToast(err?.message || '⚠️ Failed to delete staff.', 'error');
     }
   };
 
@@ -1307,7 +1317,7 @@ export default function StaffManagement() {
                       <button
                         onClick={() => handleDeleteStaff(staff.id, staff.name)}
                         className="p-2 text-slate-400 hover:text-rose-600 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                        title="Deactivate"
+                        title="Delete Staff Member"
                       >
                         <Trash2 size={15} />
                       </button>

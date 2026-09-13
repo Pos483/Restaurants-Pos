@@ -93,7 +93,7 @@ export const pullTable = async (tableName: string, userId: string) => {
 
     if (allRows.length === 0) {
       if (!isLargeTable && tableName !== 'active_orders') {
-        if (tableName !== 'restaurant_profile' && tableName !== 'restaurant_settings' && tableName !== 'staff') {
+        if (tableName !== 'restaurant_profile' && tableName !== 'restaurant_settings') {
           await localDb.table(tableName).clear();
         }
       }
@@ -117,7 +117,7 @@ export const pullTable = async (tableName: string, userId: string) => {
         for (const localItem of localItems) {
           const localId = String(localItem.id);
           if (!remoteIds.has(localId)) {
-            if (tableName === 'restaurant_profile' || tableName === 'restaurant_settings' || tableName === 'staff') continue;
+            if (tableName === 'restaurant_profile' || tableName === 'restaurant_settings') continue;
             if (localItem.id !== undefined) {
               await dexieTable.delete(localItem.id);
             }
@@ -379,8 +379,6 @@ export const initDb = async () => {
     try {
       await pullTable('restaurant_profile', userId);
       await pullTable('restaurant_settings', userId);
-      // Push any local staff data to Supabase to prevent data loss before pull
-      await syncLocalStaffToSupabase(userId);
     } catch (e) {
       console.error('[DB] Priority sync failed:', e);
     }

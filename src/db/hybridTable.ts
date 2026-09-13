@@ -50,6 +50,7 @@ export class HybridTable<T extends BaseDBRecord> {
       let allRows: Record<string, any>[] = [];
       let from = 0;
       const limit = 1000;
+      let hasError = false;
 
       while (true) {
         const { data, error } = await supabase
@@ -60,6 +61,7 @@ export class HybridTable<T extends BaseDBRecord> {
 
         if (error) {
           console.error(`[HybridTable.toArray] Error fetching ${this.tableName}:`, error);
+          hasError = true;
           break;
         }
 
@@ -72,16 +74,27 @@ export class HybridTable<T extends BaseDBRecord> {
         }
       }
 
-      if (allRows.length === 0) {
+      if (hasError) {
         try {
-          const localFallback = await this.dexieTable.toArray();
-          if (localFallback.length > 0) {
-            return localFallback;
-          }
-        } catch (_) {}
+          return await this.dexieTable.toArray();
+        } catch (_) {
+          return [];
+        }
       }
 
-      return allRows.map(r => this.fromRow(r));
+      if (allRows.length === 0) {
+        try {
+          await this.dexieTable.clear();
+        } catch (_) {}
+        return [];
+      }
+
+      const records = allRows.map(r => this.fromRow(r));
+      try {
+        await this.dexieTable.clear();
+        await this.dexieTable.bulkPut(records);
+      } catch (_) {}
+      return records;
     }
     return await this.dexieTable.toArray();
   }
