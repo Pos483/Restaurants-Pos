@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Table, OrderItem, MenuItem, mergeOrderItems, MergedTableSnapshot } from '../types';
 import { DBMenuItem, DBCategory, db, getNextKotNumber, deductStockForBill, recordCustomerCredit, normalizePhone, getNextBillNumber, upsertPosCustomer, findCustomerByPhone } from '../db';
 import { useLiveQuery } from '../db';
@@ -204,9 +204,9 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
 
   const handleAddTable = async () => {
     // Find max table id
-    const maxId = tables.reduce((max, t) => Math.max(max, t.id), 0);
+    const maxId = tables.reduce((max, t) => Math.max(max, Number(t.id)), 0);
     const newId = maxId + 1;
-    await db.activeOrders.add({
+    await db.activeOrders.put({
       id: newId,
       status: 'available',
       orders: [],
@@ -214,8 +214,23 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
     });
   };
 
-  // Ensure tables are sorted by ID numerically
-  const sortedTables = [...tables].sort((a, b) => a.id - b.id);
+  // Ensure tables are sorted by ID numerically and deduplicated
+  const sortedTables = useMemo(() => {
+    const map = new Map<number, Table>();
+    for (const t of tables) {
+      const numId = Number(t.id);
+      if (isNaN(numId)) continue;
+      const existing = map.get(numId);
+      if (!existing) {
+        map.set(numId, { ...t, id: numId });
+      } else {
+        if ((t.orders?.length || 0) > (existing.orders?.length || 0) || t.status === 'occupied') {
+          map.set(numId, { ...t, id: numId });
+        }
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.id - b.id);
+  }, [tables]);
 
   const getEffectiveMergedIds = (t: Table | null): number[] => {
     if (!t) return [];

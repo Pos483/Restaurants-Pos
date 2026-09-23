@@ -86,7 +86,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (supabase) {
-      supabase.auth.getSession().then(async ({ data: { session } }) => {
+      supabase.auth.getSession().then(async ({ data: { session }, error }: any) => {
+        if (error) {
+          logger.warn('Error fetching Supabase session:', error.message);
+          try {
+            await supabase!.auth.signOut({ scope: 'local' });
+          } catch (_) {
+            Object.keys(localStorage)
+              .filter(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
+              .forEach(k => localStorage.removeItem(k));
+          }
+          localStorage.removeItem('activeUserId');
+          localStorage.removeItem('activeUserEmail');
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+
         if (session) {
           const emailConfirmed = session.user.email_confirmed_at != null;
           if (!emailConfirmed) {
@@ -111,8 +127,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setUser(null);
         }
         setLoading(false);
-      }).catch(err => {
+      }).catch(async err => {
         logger.error('Error fetching Supabase session:', err);
+        try {
+          await supabase!.auth.signOut({ scope: 'local' });
+        } catch (_) {
+          Object.keys(localStorage)
+            .filter(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
+            .forEach(k => localStorage.removeItem(k));
+        }
+        localStorage.removeItem('activeUserId');
+        localStorage.removeItem('activeUserEmail');
+        setUser(null);
         setLoading(false);
       });
 

@@ -96,7 +96,36 @@ export class HybridTable<T extends BaseDBRecord> {
       } catch (_) {}
       return records;
     }
-    return await this.dexieTable.toArray();
+    const raw = await this.dexieTable.toArray();
+    if (this.tableName === 'active_orders') {
+      const tableMap = new Map<number, T>();
+      const stringKeysToDelete: string[] = [];
+
+      for (const item of raw) {
+        const numId = Number(item.id);
+        if (typeof (item as any).id === 'string') {
+          stringKeysToDelete.push((item as any).id);
+        }
+        const existing = tableMap.get(numId);
+        if (!existing) {
+          tableMap.set(numId, { ...item, id: numId });
+        } else {
+          // If one is occupied or has orders, prefer it
+          const existingOrders = (existing as any).orders?.length || 0;
+          const currentOrders = (item as any).orders?.length || 0;
+          if (currentOrders > existingOrders || (item as any).status === 'occupied') {
+            tableMap.set(numId, { ...item, id: numId });
+          }
+        }
+      }
+
+      if (stringKeysToDelete.length > 0) {
+        Promise.all(stringKeysToDelete.map(k => this.dexieTable.delete(k))).catch(() => {});
+      }
+
+      return Array.from(tableMap.values());
+    }
+    return raw;
   }
 
   async queryDateRange(startMs: number, endMs: number): Promise<T[]> {
@@ -170,8 +199,11 @@ export class HybridTable<T extends BaseDBRecord> {
       throw new Error("No user is logged in. Cannot write to server.");
     }
 
-    const id = record.id ? String(record.id) : crypto.randomUUID();
-    locallyCreatedIds.add(id);
+    const isNumericId = this.tableName === 'active_orders' || typeof record.id === 'number';
+    const id = record.id !== undefined && record.id !== null
+      ? (isNumericId ? Number(record.id) : String(record.id))
+      : (isNumericId ? 1 : crypto.randomUUID());
+    locallyCreatedIds.add(String(id));
     const finalRecord = { ...record, id } as T;
 
     if (this.onlineOnly) {
@@ -181,6 +213,9 @@ export class HybridTable<T extends BaseDBRecord> {
         throw error;
       }
       try {
+        if (this.tableName === 'active_orders') {
+          await this.dexieTable.delete(String(id));
+        }
         await this.dexieTable.put(finalRecord);
       } catch (_) {}
       notifyGlobalChange(this.tableName);
@@ -188,6 +223,9 @@ export class HybridTable<T extends BaseDBRecord> {
     }
 
     // 1. Save locally in Dexie first (to prevent double printing on Supabase Realtime echo)
+    if (this.tableName === 'active_orders') {
+      await this.dexieTable.delete(String(id));
+    }
     await this.dexieTable.put(finalRecord);
     notifyGlobalChange(this.tableName);
 
@@ -213,8 +251,13 @@ export class HybridTable<T extends BaseDBRecord> {
   }
 
   async put(record: T): Promise<string | number> {
-    const id = record.id;
-    if (!id) throw new Error('Cannot put a record without id');
+    let id = record.id;
+    if (id === undefined || id === null) throw new Error('Cannot put a record without id');
+    if (this.tableName === 'active_orders') {
+      id = Number(id);
+      (record as any).id = id;
+      await this.dexieTable.delete(String(id));
+    }
     locallyCreatedIds.add(String(id));
 
     if (this.tableName === 'bills') {
@@ -291,6 +334,10 @@ export class HybridTable<T extends BaseDBRecord> {
   }
 
   async update(id: string | number, changes: Partial<T>, skipSync: boolean = false): Promise<string | number> {
+    if (this.tableName === 'active_orders') {
+      id = Number(id);
+      await this.dexieTable.delete(String(id)).catch(() => {});
+    }
     locallyCreatedIds.add(String(id));
     // Lock restaurantCode for profile table to make it immutable (treat like User ID)
     if (this.tableName === 'restaurant_profile') {
@@ -385,7 +432,12 @@ export class HybridTable<T extends BaseDBRecord> {
         throw error;
       }
       try {
-        await this.dexieTable.delete(id);
+        if (this.tableName === 'active_orders') {
+          await this.dexieTable.delete(Number(id));
+          await this.dexieTable.delete(String(id));
+        } else {
+          await this.dexieTable.delete(id);
+        }
       } catch (_) {}
       notifyGlobalChange(this.tableName);
       return;
@@ -398,7 +450,12 @@ export class HybridTable<T extends BaseDBRecord> {
     }
 
     // 2. Delete locally in Dexie only on success
-    await this.dexieTable.delete(id);
+    if (this.tableName === 'active_orders') {
+      await this.dexieTable.delete(Number(id));
+      await this.dexieTable.delete(String(id));
+    } else {
+      await this.dexieTable.delete(id);
+    }
     notifyGlobalChange(this.tableName);
   }
 
@@ -700,7 +757,7 @@ const getSavedMergedMeta = (tableId: number | string) => {
 
 const activeOrdersTable = new HybridTable<Table>(
   'active_orders',
-  (o, uid) => ({ app_user_id: uid, id: o.id, status: o.status, orders: o.orders ?? [], table_pin: o.tablePin ?? null, customer_name: o.customerName ?? null, customer_phone: o.customerPhone ?? null, updated_at: new Date().toISOString() }),
+  (o, uid) => ({ app_user_id: uid, id: Number(o.id), status: o.status, orders: o.orders ?? [], table_pin: o.tablePin ?? null, customer_name: o.customerName ?? null, customer_phone: o.customerPhone ?? null, updated_at: new Date().toISOString() }),
   (r) => {
     const meta = getSavedMergedMeta(r.id);
     return {

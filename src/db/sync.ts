@@ -115,6 +115,10 @@ export const pullTable = async (tableName: string, userId: string) => {
         const remoteIds = new Set(records.map(r => String(r.id)));
 
         for (const localItem of localItems) {
+          if (tableName === 'active_orders' && typeof localItem.id === 'string') {
+            await dexieTable.delete(localItem.id);
+            continue;
+          }
           const localId = String(localItem.id);
           if (!remoteIds.has(localId)) {
             if (tableName === 'restaurant_profile' || tableName === 'restaurant_settings') continue;
@@ -320,6 +324,11 @@ export const setupRealtime = (userId: string) => {
               }
             }
 
+            if (table === 'active_orders') {
+              localRecord.id = Number(localRecord.id);
+              await dexieTable.delete(String(localRecord.id));
+            }
+
             await dexieTable.put(localRecord);
             notifyGlobalChange(table);
 
@@ -328,8 +337,13 @@ export const setupRealtime = (userId: string) => {
             }
           } else if (payload.eventType === 'DELETE') {
             if (table !== 'restaurant_profile' && table !== 'restaurant_settings') {
-              const idToDelete = table === 'active_orders' ? Number(payload.old.id) : payload.old.id;
-              await dexieTable.delete(idToDelete);
+              if (table === 'active_orders') {
+                const numId = Number(payload.old.id);
+                await dexieTable.delete(numId);
+                await dexieTable.delete(String(payload.old.id));
+              } else {
+                await dexieTable.delete(payload.old.id);
+              }
               notifyGlobalChange(table);
             }
           }

@@ -1,10 +1,10 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense, useMemo } from 'react';
 import { useApp } from './contexts/AppContext';
 import { useTheme } from './contexts/ThemeContext';
 import { useLiveQuery, db } from './db';
 import { useAppSetup, getSharedAudioContext } from './hooks/useAppSetup';
 import { AppLayout } from './components/AppLayout';
-import { OrderItem } from './types';
+import { Table, OrderItem } from './types';
 import { Unplug } from 'lucide-react';
 import { logger } from './utils/logger';
 import PageLoader from './components/PageLoader';
@@ -67,7 +67,23 @@ export default function App() {
   }, [showToast]);
 
 
-  const tables = useLiveQuery(() => db.activeOrders.toArray(), [], 'active_orders') || [];
+  const rawTables = useLiveQuery(() => db.activeOrders.toArray(), [], 'active_orders') || [];
+  const tables = useMemo(() => {
+    const map = new Map<number, Table>();
+    for (const t of rawTables) {
+      const numId = Number(t.id);
+      if (isNaN(numId)) continue;
+      const existing = map.get(numId);
+      if (!existing) {
+        map.set(numId, { ...t, id: numId });
+      } else {
+        if ((t.orders?.length || 0) > (existing.orders?.length || 0) || t.status === 'occupied') {
+          map.set(numId, { ...t, id: numId });
+        }
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.id - b.id);
+  }, [rawTables]);
 
   // Automatically assign a random 3-digit PIN to any table that doesn't have one
   useEffect(() => {
