@@ -35,9 +35,9 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
   const [variantModalItem, setVariantModalItem] = useState<DBMenuItem | null>(null);
   const [showMobileCart, setShowMobileCart] = useState<boolean>(false);
 
-  // Billing states
   const [discountAmount, setDiscountAmount] = useState<string>('');
   const [discountType, setDiscountType] = useState<'amount'|'percentage'>('amount');
+  const [discountReason, setDiscountReason] = useState<string>('');
   const [customerName, setCustomerName] = useState<string>('');
   const [customerPhone, setCustomerPhone] = useState<string>('');
   const [showCustomer, setShowCustomer] = useState<boolean>(false);
@@ -126,10 +126,30 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
         setLocalOrders(table.orders || []);
         setCustomerName(table.customerName || '');
         setCustomerPhone(table.customerPhone || '');
+        let discAmount = table.discountAmount;
+        let discType = table.discountType;
+        let discReason = table.discountReason;
+        if (!discAmount) {
+          try {
+            const saved = localStorage.getItem(`table_discount_meta_${table.id}`);
+            if (saved) {
+              const p = JSON.parse(saved);
+              discAmount = p.discountAmount;
+              discType = p.discountType;
+              discReason = p.discountReason;
+            }
+          } catch (_) {}
+        }
+        setDiscountAmount(discAmount || '');
+        setDiscountType(discType || 'amount');
+        setDiscountReason(discReason || '');
       } else {
         setLocalOrders([]);
         setCustomerName('');
         setCustomerPhone('');
+        setDiscountAmount('');
+        setDiscountType('amount');
+        setDiscountReason('');
       }
     } else if (table) {
       if (isUnmergingRef.current || pendingUpdateRef.current) return;
@@ -151,8 +171,6 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
 
   // Reset all billing parameters and modal controls on table switch
   useEffect(() => {
-    setDiscountAmount('');
-    setDiscountType('amount');
     setPaymentMethod('Cash');
     setPendingKotNum(null);
     setShowCustomer(false);
@@ -175,6 +193,46 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
     const sys = await db.restaurantSettings.get('global');
     return { ...(profile || {}), ...(sys || {}) };
   }, [], ['restaurant_profile', 'restaurant_settings']);
+
+  const subtotal = localOrders.reduce((sum, item) => sum + ((item.menuItem?.price || 0) * (item.quantity || 0)), 0);
+
+  // Auto-apply festival discount if active in restaurant profile and table has no manual override
+  useEffect(() => {
+    const isFestivalActive = Boolean(
+      globalSettings?.festivalDiscountEnabled || 
+      localStorage.getItem('festivalDiscountEnabled') === 'true'
+    );
+    const festivalVal = String(localStorage.getItem('festivalDiscountValue') || globalSettings?.festivalDiscountValue || '10');
+    const festivalType = (localStorage.getItem('festivalDiscountType') || globalSettings?.festivalDiscountType || 'percentage') as 'amount' | 'percentage';
+    const festivalReason = localStorage.getItem('festivalDiscountName') || globalSettings?.festivalDiscountName || 'Festival Offer';
+    const minOrder = Number(localStorage.getItem('festivalDiscountMinOrder') || globalSettings?.festivalDiscountMinOrder || 0);
+
+    if (!table || !isFestivalActive || !(Number(festivalVal) > 0)) {
+      if (discountReason && discountReason === festivalReason) {
+        setDiscountAmount('');
+        setDiscountReason('');
+      }
+      return;
+    }
+    try {
+      const saved = localStorage.getItem(`table_discount_meta_${table.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.manualOverride) return;
+      }
+    } catch (_) {}
+
+    if (!discountAmount || discountReason === festivalReason) {
+      if (subtotal >= minOrder && subtotal > 0) {
+        setDiscountAmount(festivalVal);
+        setDiscountType(festivalType);
+        setDiscountReason(festivalReason);
+      } else if (discountReason === festivalReason && (subtotal < minOrder || subtotal === 0)) {
+        setDiscountAmount('');
+        setDiscountReason('');
+      }
+    }
+  }, [table?.id, globalSettings?.festivalDiscountEnabled, globalSettings?.festivalDiscountValue, globalSettings?.festivalDiscountType, globalSettings?.festivalDiscountName, globalSettings?.festivalDiscountMinOrder, subtotal]);
 
   // Set initial category when loaded
   useEffect(() => {
@@ -266,6 +324,8 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
 
       let customerNameToKeep = target.customerName || '';
       let customerPhoneToKeep = target.customerPhone || '';
+      let discountAmountToKeep = target.discountAmount || '';
+      let discountTypeToKeep = target.discountType || 'amount';
 
       for (const sId of sourceIds) {
         const src = tables.find(t => t.id === sId);
@@ -276,6 +336,8 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
           orders: JSON.parse(JSON.stringify(src.orders)),
           customerName: src.customerName,
           customerPhone: src.customerPhone,
+          discountAmount: src.discountAmount,
+          discountType: src.discountType,
         });
 
         newlyMergedIds.push(sId);
@@ -292,6 +354,10 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
         if (!customerPhoneToKeep && src.customerPhone) {
           customerPhoneToKeep = src.customerPhone;
         }
+        if (!discountAmountToKeep && src.discountAmount) {
+          discountAmountToKeep = src.discountAmount;
+          discountTypeToKeep = src.discountType || 'amount';
+        }
 
         try {
           localStorage.removeItem(`table_merged_meta_${sId}`);
@@ -303,6 +369,8 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
           tablePin: Math.floor(100 + Math.random() * 900).toString(),
           customerName: undefined,
           customerPhone: undefined,
+          discountAmount: undefined,
+          discountType: undefined,
           mergedTableIds: [],
           mergedSnapshots: [],
         });
@@ -327,12 +395,16 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
         mergedSnapshots: snapshots,
         customerName: customerNameToKeep || undefined,
         customerPhone: customerPhoneToKeep || undefined,
+        discountAmount: discountAmountToKeep || undefined,
+        discountType: discountTypeToKeep || undefined,
       });
 
       if (selectedTableId === targetId) {
         setLocalOrders(combinedOrders);
         if (customerNameToKeep) setCustomerName(customerNameToKeep);
         if (customerPhoneToKeep) setCustomerPhone(customerPhoneToKeep);
+        setDiscountAmount(discountAmountToKeep);
+        setDiscountType(discountTypeToKeep);
       } else {
         onSelectTable(targetId);
       }
@@ -422,6 +494,8 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
           orders: snapshot.orders,
           customerName: snapshot.customerName,
           customerPhone: snapshot.customerPhone,
+          discountAmount: snapshot.discountAmount,
+          discountType: snapshot.discountType,
           tablePin: Math.floor(100 + Math.random() * 900).toString(),
           mergedTableIds: [],
           mergedSnapshots: [],
@@ -468,9 +542,9 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
     );
   }
 
-  const subtotal = localOrders.reduce((sum, item) => sum + ((item.menuItem?.price || 0) * (item.quantity || 0)), 0);
-  const rawDiscount = Number(discountAmount) || 0;
-  const discountVal = discountType === 'percentage' ? (subtotal * (rawDiscount / 100)) : rawDiscount;
+  const rawDiscount = Math.max(0, Number(discountAmount) || 0);
+  const calculatedDiscount = discountType === 'percentage' ? (subtotal * (rawDiscount / 100)) : rawDiscount;
+  const discountVal = Math.min(subtotal, Math.max(0, Math.round(calculatedDiscount)));
   const taxableAmount = Math.max(0, subtotal - discountVal);
   const gstPerc = globalSettings?.gstPercentage ?? 5;
   const tax = taxableAmount * (gstPerc / 100);
@@ -556,6 +630,9 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
         timestamp: billTimestamp,
         billNumber: currentSeq,
         discount: discountVal,
+        discountType,
+        discountRate: discountAmount,
+        discountReason: discountReason || undefined,
         customerName: customerName || undefined,
         customerPhone: customerPhone || undefined,
         data: {
@@ -584,7 +661,25 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
 
       if (shouldPrint) {
         try {
-          await ThermalPrinter.printReceipt(billTableId, localOrders, subtotal, tax, finalTotal, paymentMethod, currentSeq, globalSettings, discountVal, customerName, customerPhone, billTimestamp);
+          await ThermalPrinter.printReceipt(
+            billTableId, 
+            localOrders, 
+            subtotal, 
+            tax, 
+            finalTotal, 
+            paymentMethod, 
+            currentSeq, 
+            globalSettings, 
+            discountVal, 
+            customerName, 
+            customerPhone, 
+            billTimestamp,
+            {
+              type: discountType,
+              rate: discountAmount,
+              reason: discountReason
+            }
+          );
         } catch (printErr) {
           console.error('Printing failed, but saving/settling bill:', printErr);
         }
@@ -593,6 +688,7 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
       setSettledBillData({ total: finalTotal, billNumber: currentSeq, tableLabel: String(billTableId) });
       try {
         localStorage.removeItem(`table_merged_meta_${table.id}`);
+        localStorage.removeItem(`table_discount_meta_${table.id}`);
       } catch (_) {}
       trackEvent('settle_bill', 'billing', paymentMethod, finalTotal);
 
@@ -1154,7 +1250,7 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
         </div>
 
         <div className="p-4 border-t bg-gray-50 dark:bg-[#1e293b]/30 dark:border-slate-800/80 shrink-0">
-          {table.status === 'occupied' && (
+          {(table.status === 'occupied' || localOrders.length > 0) && (
             <div className="mb-4 flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-slate-800">
               <div className="flex gap-2">
                 <button 
@@ -1167,7 +1263,12 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
                   onClick={() => setShowDiscount(true)}
                   className={`flex-1 py-2.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1 border-2 transition-all ${Number(discountAmount) > 0 ? 'border-orange-500 bg-orange-50 text-orange-700 dark:border-orange-600 dark:bg-orange-950/45 dark:text-orange-400' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-slate-800 dark:bg-[#1e293b] dark:text-slate-300 dark:hover:bg-slate-800/65'}`}
                 >
-                  <Tag size={13} /> {Number(discountAmount) > 0 ? `${discountAmount}${discountType === 'percentage' ? '%' : '₹'}` : 'Discount'}
+                  <Tag size={13} />
+                  <span className="truncate">
+                    {Number(discountAmount) > 0 
+                      ? (discountReason ? `${discountReason} (${discountType === 'percentage' ? `${discountAmount}%` : `₹${discountAmount}`})` : (discountType === 'percentage' ? `${discountAmount}%` : `₹${discountAmount}`)) 
+                      : 'Discount'}
+                  </span>
                 </button>
                 <button 
                   type="button"
@@ -1187,7 +1288,10 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
               </div>
               {discountVal > 0 && (
                 <div className="flex justify-between text-sm font-bold text-green-600 dark:text-green-400">
-                  <span>Discount</span>
+                  <span className="flex items-center gap-1">
+                    <Tag size={12} />
+                    <span>{discountReason ? `${discountReason} ` : ''}{discountType === 'percentage' ? `Discount (${discountAmount}%)` : 'Discount (Flat)'}</span>
+                  </span>
                   <span>-₹{discountVal.toFixed(2)}</span>
                 </div>
               )}
@@ -1199,7 +1303,7 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
           )}
           <div className="flex justify-between items-center mb-4 text-xl font-black text-gray-800 dark:text-slate-200">
             <span>Total:</span>
-            <span className="text-orange-600 dark:text-orange-400">₹{table.status === 'occupied' ? finalTotal.toFixed(2) : totalAmount.toFixed(2)}</span>
+            <span className="text-orange-600 dark:text-orange-400">₹{(table.status === 'occupied' || discountVal > 0) ? finalTotal.toFixed(2) : totalAmount.toFixed(2)}</span>
           </div>
           <div className="flex gap-2 mb-2">
             <button 
@@ -1337,9 +1441,27 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
         <DiscountModal
           initialAmount={discountAmount}
           initialType={discountType}
-          onSave={(amount, type) => {
-            setDiscountAmount(amount);
+          onSave={async (amount, type) => {
+            const num = Number(amount) || 0;
+            const validAmount = num > 0 ? amount : '';
+            setDiscountAmount(validAmount);
             setDiscountType(type);
+            setDiscountReason('');
+            if (table) {
+              try {
+                localStorage.setItem(`table_discount_meta_${table.id}`, JSON.stringify({
+                  discountAmount: validAmount,
+                  discountType: type,
+                  discountReason: '',
+                  manualOverride: true
+                }));
+              } catch (_) {}
+              await db.activeOrders.update(table.id, {
+                discountAmount: validAmount,
+                discountType: type,
+                discountReason: undefined
+              });
+            }
             setShowDiscount(false);
           }}
           onClose={() => setShowDiscount(false)}
@@ -1359,9 +1481,22 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
         isOpen={showClearConfirm}
         title="Clear Order"
         message="Are you sure you want to clear the entire order for this table?"
-        onConfirm={() => {
+        onConfirm={async () => {
           setLocalOrders([]);
+          setDiscountAmount('');
+          setDiscountType('amount');
+          setDiscountReason('');
+          try {
+            if (table) localStorage.removeItem(`table_discount_meta_${table.id}`);
+          } catch (_) {}
           onUpdateOrder(table.id, []);
+          if (table) {
+            await db.activeOrders.update(table.id, {
+              discountAmount: undefined,
+              discountType: undefined,
+              discountReason: undefined
+            });
+          }
           setShowClearConfirm(false);
         }}
         onCancel={() => setShowClearConfirm(false)}

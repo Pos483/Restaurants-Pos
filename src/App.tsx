@@ -73,12 +73,27 @@ export default function App() {
     for (const t of rawTables) {
       const numId = Number(t.id);
       if (isNaN(numId)) continue;
+      let discAmount = t.discountAmount;
+      let discType = t.discountType;
+      let discReason = t.discountReason;
+      if (!discAmount) {
+        try {
+          const saved = localStorage.getItem(`table_discount_meta_${numId}`);
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            discAmount = parsed.discountAmount;
+            discType = parsed.discountType;
+            discReason = parsed.discountReason;
+          }
+        } catch (_) {}
+      }
+      const itemWithDisc: Table = { ...t, id: numId, discountAmount: discAmount, discountType: discType, discountReason: discReason };
       const existing = map.get(numId);
       if (!existing) {
-        map.set(numId, { ...t, id: numId });
+        map.set(numId, itemWithDisc);
       } else {
         if ((t.orders?.length || 0) > (existing.orders?.length || 0) || t.status === 'occupied') {
-          map.set(numId, { ...t, id: numId });
+          map.set(numId, itemWithDisc);
         }
       }
     }
@@ -144,6 +159,11 @@ export default function App() {
     }
 
     try {
+      localStorage.removeItem(`table_discount_meta_${tableId}`);
+      localStorage.removeItem(`table_merged_meta_${tableId}`);
+    } catch (_) {}
+
+    try {
       const result = await db.activeOrders.update(tableId, {
         status: 'available',
         orders: [],
@@ -151,7 +171,9 @@ export default function App() {
         mergedTableIds: [],
         mergedSnapshots: [],
         customerName: undefined,
-        customerPhone: undefined
+        customerPhone: undefined,
+        discountAmount: undefined,
+        discountType: undefined
       });
       if (!result) {
         console.error('Settle bill: update returned falsy — bill may not have been saved.');

@@ -61,7 +61,25 @@ export default function TableGrid({ tables, onSelectTable, onAddTable, onOpenMer
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
           {tables.map((table) => {
             const isOccupied = table.status === 'occupied';
-            const totalAmount = table.orders.reduce((sum, item) => sum + (item.menuItem.price * item.quantity), 0);
+            const subtotal = table.orders.reduce((sum, item) => sum + ((item?.menuItem?.price || 0) * (item?.quantity || 0)), 0);
+            let discAmount = table.discountAmount;
+            let discType = table.discountType;
+            let discReason = table.discountReason;
+            if (!discAmount) {
+              try {
+                const saved = localStorage.getItem(`table_discount_meta_${table.id}`);
+                if (saved) {
+                  const p = JSON.parse(saved);
+                  discAmount = p.discountAmount;
+                  discType = p.discountType;
+                  discReason = p.discountReason;
+                }
+              } catch (_) {}
+            }
+            const rawDiscount = Math.max(0, Number(discAmount) || 0);
+            const calculatedDiscount = discType === 'percentage' ? (subtotal * (rawDiscount / 100)) : rawDiscount;
+            const discountVal = Math.min(subtotal, Math.max(0, Math.round(calculatedDiscount)));
+            const discountedSubtotal = Math.max(0, subtotal - discountVal);
             const mergedIds = getTableMergedIds(table);
             const isMerged = mergedIds.length > 0;
 
@@ -98,8 +116,15 @@ export default function TableGrid({ tables, onSelectTable, onAddTable, onOpenMer
                   {isOccupied ? 'Occupied' : 'Available'}
                 </div>
                 {isOccupied && (
-                  <div className="mt-2 text-xs font-black bg-white/80 backdrop-blur-sm px-3 py-1 rounded-lg text-orange-600 shadow-sm border border-orange-100 dark:bg-slate-800/80 dark:text-orange-400 dark:border-orange-900/40 max-w-full truncate">
-                    ₹{totalAmount.toFixed(2)}
+                  <div className="mt-2 flex items-center justify-center gap-1.5 max-w-full flex-wrap">
+                    <span className="text-xs font-black bg-white/80 backdrop-blur-sm px-2.5 py-1 rounded-lg text-orange-600 shadow-sm border border-orange-100 dark:bg-slate-800/80 dark:text-orange-400 dark:border-orange-900/40 truncate">
+                      ₹{discountedSubtotal.toFixed(2)}
+                    </span>
+                    {rawDiscount > 0 && (
+                      <span className="text-[10px] font-black bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-200/50 dark:border-emerald-800/40 truncate" title={`${discReason ? `${discReason}: ` : 'Discount: '}${discAmount}${discType === 'percentage' ? '%' : '₹'}`}>
+                        {discReason ? '🎉 ' : ''}-{discAmount}{discType === 'percentage' ? '%' : '₹'}
+                      </span>
+                    )}
                   </div>
                 )}
                 {isMerged && (

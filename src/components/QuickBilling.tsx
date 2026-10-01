@@ -34,13 +34,155 @@ export default function QuickBilling() {
   }, [cart.length]);
 
   const [paymentMethod, setPaymentMethod] = useState<string>('Cash');
-  const [orderType, setOrderType] = useState<string>('Takeaway');
+  const [orderType, setOrderType] = useState<string>(() => {
+    try {
+      return localStorage.getItem('quick_billing_order_type') || 'Takeaway';
+    } catch (e) {
+      return 'Takeaway';
+    }
+  });
   const [variantModalItem, setVariantModalItem] = useState<DBMenuItem | null>(null);
-  const [discountAmount, setDiscountAmount] = useState<string>('');
-  const [discountType, setDiscountType] = useState<'amount'|'percentage'>('amount');
-  const [customerName, setCustomerName] = useState<string>('');
-  const [customerPhone, setCustomerPhone] = useState<string>('');
+  const [discountAmount, setDiscountAmount] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('quick_billing_discount');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.amount !== undefined ? String(parsed.amount) : '';
+      }
+    } catch (e) {}
+    return '';
+  });
+  const [discountType, setDiscountType] = useState<'amount'|'percentage'>(() => {
+    try {
+      const saved = localStorage.getItem('quick_billing_discount');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.type === 'percentage' || parsed.type === 'amount') return parsed.type;
+      }
+    } catch (e) {}
+    return 'amount';
+  });
+  const [discountReason, setDiscountReason] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('quick_billing_discount');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.reason || '';
+      }
+    } catch (e) {}
+    return '';
+  });
+  const [customerName, setCustomerName] = useState<string>(() => {
+    try {
+      return localStorage.getItem('quick_billing_customer_name') || '';
+    } catch (e) {
+      return '';
+    }
+  });
+  const [customerPhone, setCustomerPhone] = useState<string>(() => {
+    try {
+      return localStorage.getItem('quick_billing_customer_phone') || '';
+    } catch (e) {
+      return '';
+    }
+  });
   const [showCustomer, setShowCustomer] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      if (discountAmount && Number(discountAmount) > 0) {
+        const existing = localStorage.getItem('quick_billing_discount');
+        const parsed = existing ? JSON.parse(existing) : {};
+        localStorage.setItem('quick_billing_discount', JSON.stringify({
+          ...parsed,
+          amount: discountAmount,
+          type: discountType,
+          reason: discountReason
+        }));
+      } else {
+        const existing = localStorage.getItem('quick_billing_discount');
+        const parsed = existing ? JSON.parse(existing) : {};
+        if (parsed.manualOverride) {
+          localStorage.setItem('quick_billing_discount', JSON.stringify({
+            amount: '',
+            type: discountType,
+            reason: '',
+            manualOverride: true
+          }));
+        } else {
+          localStorage.removeItem('quick_billing_discount');
+        }
+      }
+    } catch (e) {}
+  }, [discountAmount, discountType, discountReason]);
+
+  const subtotal = cart.reduce((sum, item) => sum + ((item.menuItem?.price || 0) * (item.quantity || 0)), 0);
+
+  // Auto-apply festival discount if active in restaurant profile and cashier hasn't manually overridden it
+  useEffect(() => {
+    const isFestivalActive = Boolean(
+      globalSettings?.festivalDiscountEnabled || 
+      localStorage.getItem('festivalDiscountEnabled') === 'true'
+    );
+    const festivalVal = String(localStorage.getItem('festivalDiscountValue') || globalSettings?.festivalDiscountValue || '10');
+    const festivalType = (localStorage.getItem('festivalDiscountType') || globalSettings?.festivalDiscountType || 'percentage') as 'amount' | 'percentage';
+    const festivalReason = localStorage.getItem('festivalDiscountName') || globalSettings?.festivalDiscountName || 'Festival Offer';
+    const minOrder = Number(localStorage.getItem('festivalDiscountMinOrder') || globalSettings?.festivalDiscountMinOrder || 0);
+
+    if (!isFestivalActive || !(Number(festivalVal) > 0)) {
+      if (discountReason && discountReason === festivalReason) {
+        setDiscountAmount('');
+        setDiscountReason('');
+      }
+      return;
+    }
+    try {
+      const saved = localStorage.getItem('quick_billing_discount');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.manualOverride) return;
+      }
+    } catch (_) {}
+
+    if (!discountAmount || discountReason === festivalReason) {
+      if (subtotal >= minOrder && subtotal > 0) {
+        setDiscountAmount(festivalVal);
+        setDiscountType(festivalType);
+        setDiscountReason(festivalReason);
+      } else if (discountReason === festivalReason && (subtotal < minOrder || subtotal === 0)) {
+        setDiscountAmount('');
+        setDiscountReason('');
+      }
+    }
+  }, [globalSettings?.festivalDiscountEnabled, globalSettings?.festivalDiscountValue, globalSettings?.festivalDiscountType, globalSettings?.festivalDiscountName, globalSettings?.festivalDiscountMinOrder, subtotal]);
+
+  useEffect(() => {
+    try {
+      if (customerName) {
+        localStorage.setItem('quick_billing_customer_name', customerName);
+      } else {
+        localStorage.removeItem('quick_billing_customer_name');
+      }
+    } catch (e) {}
+  }, [customerName]);
+
+  useEffect(() => {
+    try {
+      if (customerPhone) {
+        localStorage.setItem('quick_billing_customer_phone', customerPhone);
+      } else {
+        localStorage.removeItem('quick_billing_customer_phone');
+      }
+    } catch (e) {}
+  }, [customerPhone]);
+
+  useEffect(() => {
+    try {
+      if (orderType) {
+        localStorage.setItem('quick_billing_order_type', orderType);
+      }
+    } catch (e) {}
+  }, [orderType]);
 
   useEffect(() => {
     const autofill = async () => {
@@ -49,6 +191,9 @@ export default function QuickBilling() {
         const match = await findCustomerByPhone(clean);
         if (match && match.name) {
           setCustomerName(match.name);
+          try {
+            localStorage.setItem('quick_billing_customer_name', match.name);
+          } catch (e) {}
         }
       }
     };
@@ -311,7 +456,8 @@ export default function QuickBilling() {
 
     const subtotal = cart.reduce((sum, item) => sum + ((item.menuItem?.price || 0) * (item.quantity || 0)), 0);
     const rawDiscount = Number(discountAmount) || 0;
-    const discountVal = discountType === 'percentage' ? (subtotal * (rawDiscount / 100)) : rawDiscount;
+    const calculatedDiscount = discountType === 'percentage' ? (subtotal * (rawDiscount / 100)) : rawDiscount;
+    const discountVal = Math.min(subtotal, Math.max(0, Math.round(calculatedDiscount)));
     const taxableAmount = Math.max(0, subtotal - discountVal);
     const gstPerc = globalSettings?.gstPercentage ?? 5;
     const tax = taxableAmount * (gstPerc / 100);
@@ -363,6 +509,9 @@ export default function QuickBilling() {
         timestamp: billTimestamp,
         billNumber: currentSeq,
         discount: discountVal,
+        discountType,
+        discountRate: discountAmount,
+        discountReason: discountReason || undefined,
         customerName,
         customerPhone,
         data: { orderType, shouldPrint }
@@ -381,7 +530,25 @@ export default function QuickBilling() {
 
       if (shouldPrint) {
         try {
-          await ThermalPrinter.printReceipt('Quick', cart, subtotal, tax, total, paymentMethod, currentSeq, globalSettings, discountVal, customerName, customerPhone, billTimestamp);
+          await ThermalPrinter.printReceipt(
+            'Quick', 
+            cart, 
+            subtotal, 
+            tax, 
+            total, 
+            paymentMethod, 
+            currentSeq, 
+            globalSettings, 
+            discountVal, 
+            customerName, 
+            customerPhone, 
+            billTimestamp,
+            {
+              type: discountType,
+              rate: discountAmount,
+              reason: discountReason
+            }
+          );
           showToast(`Bill #${currentSeq} Printed Successfully`);
         } catch (printErr) {
           showToast('Bill Saved but Printing Failed', 'error');
@@ -395,8 +562,15 @@ export default function QuickBilling() {
 
       setCart([]);
       setDiscountAmount('');
+      setDiscountType('amount');
+      setDiscountReason('');
       setCustomerName('');
       setCustomerPhone('');
+      try {
+        localStorage.removeItem('quick_billing_discount');
+        localStorage.removeItem('quick_billing_customer_name');
+        localStorage.removeItem('quick_billing_customer_phone');
+      } catch (e) {}
       setShowCustomer(false);
       setShowDiscount(false);
     } catch (error) {
@@ -442,9 +616,9 @@ export default function QuickBilling() {
     : menuItems.filter((item: any) => item.category === activeCategory && item.isActive !== false)).sort((a: any, b: any) => a.name.localeCompare(b.name));
   
   const sortedCategories = categories.slice().sort((a: any, b: any) => a.name.localeCompare(b.name));
-  const subtotal = cart.reduce((sum, item) => sum + ((item.menuItem?.price || 0) * (item.quantity || 0)), 0);
   const rawDiscount = Number(discountAmount) || 0;
-  const discountVal = discountType === 'percentage' ? (subtotal * (rawDiscount / 100)) : rawDiscount;
+  const calculatedDiscount = discountType === 'percentage' ? (subtotal * (rawDiscount / 100)) : rawDiscount;
+  const discountVal = Math.min(subtotal, Math.max(0, Math.round(calculatedDiscount)));
   const taxableAmount = Math.max(0, subtotal - discountVal);
   const gstPercDisplay = globalSettings?.gstPercentage ?? 5;
   const tax = taxableAmount * (gstPercDisplay / 100);
@@ -695,7 +869,12 @@ export default function QuickBilling() {
               onClick={() => setShowDiscount(true)}
               className={`flex-1 py-2.5 px-3 min-h-[44px] rounded-xl font-black text-xs flex items-center justify-center gap-1.5 border transition-all duration-200 min-w-0 ${Number(discountAmount) > 0 ? 'border-indigo-400 bg-indigo-50 text-indigo-700 shadow-sm shadow-indigo-100 dark:border-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-300 dark:shadow-none' : 'border-gray-200 bg-white text-gray-600 hover:border-indigo-300 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400 dark:hover:border-indigo-700'}`}
             >
-              <Tag size={13} className="shrink-0" /> <span className="truncate">{Number(discountAmount) > 0 ? `${discountAmount}${discountType === 'percentage' ? '%' : '₹'}` : 'Discount'}</span>
+              <Tag size={13} className="shrink-0" />
+              <span className="truncate">
+                {Number(discountAmount) > 0 
+                  ? (discountReason ? `${discountReason} (${discountType === 'percentage' ? `${discountAmount}%` : `₹${discountAmount}`})` : (discountType === 'percentage' ? `${discountAmount}%` : `₹${discountAmount}`)) 
+                  : 'Discount'}
+              </span>
             </button>
           </div>
 
@@ -721,7 +900,11 @@ export default function QuickBilling() {
 
           <div className="flex justify-between text-[13px] font-bold text-gray-500 dark:text-slate-400">
             <span>Sub: ₹{subtotal.toFixed(2)}</span>
-            {discountVal > 0 && <span className="text-emerald-600 dark:text-emerald-400">-₹{discountVal.toFixed(2)}</span>}
+            {discountVal > 0 && (
+              <span className="text-emerald-600 dark:text-emerald-400">
+                -{discountReason ? `${discountReason} ` : ''}({discountType === 'percentage' ? `${discountAmount}%` : 'Flat'}) ₹{discountVal.toFixed(2)}
+              </span>
+            )}
             <span>Tax: ₹{tax.toFixed(2)}</span>
           </div>
           <div className="flex justify-between items-center border-t border-gray-200 pt-2.5 dark:border-slate-700/50">
@@ -806,6 +989,18 @@ export default function QuickBilling() {
           onSave={(name, phone) => {
             setCustomerName(name);
             setCustomerPhone(phone);
+            try {
+              if (name.trim()) {
+                localStorage.setItem('quick_billing_customer_name', name.trim());
+              } else {
+                localStorage.removeItem('quick_billing_customer_name');
+              }
+              if (phone.trim()) {
+                localStorage.setItem('quick_billing_customer_phone', phone.trim());
+              } else {
+                localStorage.removeItem('quick_billing_customer_phone');
+              }
+            } catch (e) {}
             setShowCustomer(false);
           }}
           onClose={() => setShowCustomer(false)}
@@ -818,8 +1013,19 @@ export default function QuickBilling() {
           initialAmount={discountAmount}
           initialType={discountType}
           onSave={(amount, type) => {
-            setDiscountAmount(amount);
+            const num = Number(amount) || 0;
+            const validAmount = num > 0 ? amount : '';
+            setDiscountAmount(validAmount);
             setDiscountType(type);
+            setDiscountReason('');
+            try {
+              localStorage.setItem('quick_billing_discount', JSON.stringify({
+                amount: validAmount,
+                type,
+                reason: '',
+                manualOverride: true
+              }));
+            } catch (e) {}
             setShowDiscount(false);
           }}
           onClose={() => setShowDiscount(false)}
@@ -841,6 +1047,16 @@ export default function QuickBilling() {
         message="Are you sure you want to clear the entire cart?"
         onConfirm={() => {
           setCart([]);
+          setDiscountAmount('');
+          setDiscountType('amount');
+          setDiscountReason('');
+          setCustomerName('');
+          setCustomerPhone('');
+          try {
+            localStorage.removeItem('quick_billing_discount');
+            localStorage.removeItem('quick_billing_customer_name');
+            localStorage.removeItem('quick_billing_customer_phone');
+          } catch (e) {}
           setShowClearConfirm(false);
         }}
         onCancel={() => setShowClearConfirm(false)}

@@ -107,14 +107,21 @@ export class HybridTable<T extends BaseDBRecord> {
           stringKeysToDelete.push((item as any).id);
         }
         const existing = tableMap.get(numId);
+        const discMeta = getSavedDiscountMeta(numId);
+        const itemWithDiscount = {
+          ...item,
+          id: numId,
+          discountAmount: (item as any).discountAmount || discMeta.discountAmount,
+          discountType: (item as any).discountType || discMeta.discountType,
+        };
         if (!existing) {
-          tableMap.set(numId, { ...item, id: numId });
+          tableMap.set(numId, itemWithDiscount);
         } else {
           // If one is occupied or has orders, prefer it
           const existingOrders = (existing as any).orders?.length || 0;
           const currentOrders = (item as any).orders?.length || 0;
           if (currentOrders > existingOrders || (item as any).status === 'occupied') {
-            tableMap.set(numId, { ...item, id: numId });
+            tableMap.set(numId, itemWithDiscount);
           }
         }
       }
@@ -337,6 +344,18 @@ export class HybridTable<T extends BaseDBRecord> {
     if (this.tableName === 'active_orders') {
       id = Number(id);
       await this.dexieTable.delete(String(id)).catch(() => {});
+      if ((changes as any).discountAmount !== undefined) {
+        try {
+          if ((changes as any).discountAmount) {
+            localStorage.setItem(`table_discount_meta_${id}`, JSON.stringify({
+              discountAmount: (changes as any).discountAmount,
+              discountType: (changes as any).discountType || 'amount'
+            }));
+          } else {
+            localStorage.removeItem(`table_discount_meta_${id}`);
+          }
+        } catch (_) {}
+      }
     }
     locallyCreatedIds.add(String(id));
     // Lock restaurantCode for profile table to make it immutable (treat like User ID)
@@ -702,7 +721,33 @@ const categoriesTable = new HybridTable<DBCategory>(
 const restaurantProfileTable = new HybridTable<DBRestaurantProfile>(
   'restaurant_profile',
   (r, uid) => ({ app_user_id: uid, id: r.id, restaurant_name: r.restaurantName, phone: r.phone, email: r.email, address: r.address, gst_number: r.gstNumber, fssai_number: r.fssaiNumber, restaurant_code: r.restaurantCode, upi_id: r.upiId, upi_enabled: r.upiEnabled, thank_you_message: r.thankYouMessage, gst_percentage: r.gstPercentage, subscription_status: r.subscriptionStatus, subscription_plan: r.subscriptionPlan, subscription_expiry: r.subscriptionExpiry, license_key: r.licenseKey, activation_date: r.activationDate, referred_by_reward_granted: r.referredByRewardGranted, referred_by: r.referredBy, referral_claimed: r.referralClaimed, updated_at: new Date().toISOString() }),
-  (r) => ({ id: r.id, restaurantName: r.restaurant_name ?? undefined, phone: r.phone ?? undefined, email: r.email ?? undefined, address: r.address ?? undefined, gstNumber: r.gst_number || '', fssaiNumber: r.fssai_number || '', restaurantCode: r.restaurant_code ?? undefined, upiId: r.upi_id ?? undefined, upiEnabled: r.upi_enabled ?? false, thankYouMessage: r.thank_you_message ?? undefined, gstPercentage: r.gst_percentage ? Number(r.gst_percentage) : 0, subscriptionStatus: r.subscription_status ?? undefined, subscriptionPlan: r.subscription_plan ?? undefined, subscriptionExpiry: r.subscription_expiry ? Number(r.subscription_expiry) : undefined, licenseKey: r.license_key ?? undefined, activationDate: r.activation_date ? Number(r.activation_date) : undefined, referredByRewardGranted: r.referred_by_reward_granted ?? false, referredBy: r.referred_by ?? undefined, referralClaimed: r.referral_claimed ?? false })
+  (r) => ({ 
+    id: r.id, 
+    restaurantName: r.restaurant_name ?? undefined, 
+    phone: r.phone ?? undefined, 
+    email: r.email ?? undefined, 
+    address: r.address ?? undefined, 
+    gstNumber: r.gst_number || '', 
+    fssaiNumber: r.fssai_number || '', 
+    restaurantCode: r.restaurant_code ?? undefined, 
+    upiId: r.upi_id ?? undefined, 
+    upiEnabled: r.upi_enabled ?? false, 
+    thankYouMessage: r.thank_you_message ?? undefined, 
+    gstPercentage: r.gst_percentage ? Number(r.gst_percentage) : 0, 
+    subscriptionStatus: r.subscription_status ?? undefined, 
+    subscriptionPlan: r.subscription_plan ?? undefined, 
+    subscriptionExpiry: r.subscription_expiry ? Number(r.subscription_expiry) : undefined, 
+    licenseKey: r.license_key ?? undefined, 
+    activationDate: r.activation_date ? Number(r.activation_date) : undefined, 
+    referredByRewardGranted: r.referred_by_reward_granted ?? false, 
+    referredBy: r.referred_by ?? undefined, 
+    referralClaimed: r.referral_claimed ?? false,
+    festivalDiscountEnabled: r.festival_discount_enabled !== undefined ? Boolean(r.festival_discount_enabled) : (r.festivalDiscountEnabled !== undefined ? Boolean(r.festivalDiscountEnabled) : false),
+    festivalDiscountName: r.festival_discount_name || r.festivalDiscountName || 'Festival Offer',
+    festivalDiscountType: (r.festival_discount_type || r.festivalDiscountType || 'percentage') as 'percentage' | 'amount',
+    festivalDiscountValue: r.festival_discount_value !== undefined ? Number(r.festival_discount_value) : (r.festivalDiscountValue !== undefined ? Number(r.festivalDiscountValue) : 10),
+    festivalDiscountMinOrder: r.festival_discount_min_order !== undefined ? Number(r.festival_discount_min_order) : (r.festivalDiscountMinOrder !== undefined ? Number(r.festivalDiscountMinOrder) : 0),
+  })
 );
 
 const restaurantSettingsTable = new HybridTable<DBRestaurantSettings>(
@@ -747,6 +792,14 @@ const restaurantSettingsTable = new HybridTable<DBRestaurantSettings>(
   })
 );
 
+export const getSavedDiscountMeta = (tableId: number | string): { discountAmount?: string; discountType?: 'amount' | 'percentage'; discountReason?: string; manualOverride?: boolean } => {
+  try {
+    const saved = localStorage.getItem(`table_discount_meta_${tableId}`);
+    if (saved) return JSON.parse(saved);
+  } catch (_) {}
+  return {};
+};
+
 const getSavedMergedMeta = (tableId: number | string) => {
   try {
     const saved = localStorage.getItem(`table_merged_meta_${tableId}`);
@@ -760,6 +813,7 @@ const activeOrdersTable = new HybridTable<Table>(
   (o, uid) => ({ app_user_id: uid, id: Number(o.id), status: o.status, orders: o.orders ?? [], table_pin: o.tablePin ?? null, customer_name: o.customerName ?? null, customer_phone: o.customerPhone ?? null, updated_at: new Date().toISOString() }),
   (r) => {
     const meta = getSavedMergedMeta(r.id);
+    const discMeta = getSavedDiscountMeta(r.id);
     return {
       id: Number(r.id),
       status: r.status as Table['status'],
@@ -767,6 +821,9 @@ const activeOrdersTable = new HybridTable<Table>(
       tablePin: (r.table_pin as string) ?? undefined,
       customerName: (r.customer_name as string) ?? undefined,
       customerPhone: (r.customer_phone as string) ?? undefined,
+      discountAmount: (r.discount_amount as string) ?? discMeta.discountAmount ?? undefined,
+      discountType: (r.discount_type as 'amount' | 'percentage') ?? discMeta.discountType ?? undefined,
+      discountReason: (r.discount_reason as string) ?? discMeta.discountReason ?? undefined,
       mergedTableIds: (r.merged_table_ids as number[]) ?? meta.mergedTableIds ?? undefined,
       mergedSnapshots: (r.merged_snapshots as any[]) ?? meta.mergedSnapshots ?? undefined
     };

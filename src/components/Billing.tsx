@@ -18,6 +18,7 @@ export default function Billing({ tables, onSettleBill }: Props) {
   const [paymentMethod, setPaymentMethod] = useState<string>('Cash');
   const [discountAmount, setDiscountAmount] = useState<string>('');
   const [discountType, setDiscountType] = useState<'amount'|'percentage'>('amount');
+  const [discountReason, setDiscountReason] = useState<string>('');
   const [customerName, setCustomerName] = useState<string>('');
   const [customerPhone, setCustomerPhone] = useState<string>('');
   const [showCustomer, setShowCustomer] = useState<boolean>(false);
@@ -67,17 +68,82 @@ export default function Billing({ tables, onSettleBill }: Props) {
     return { ...(profile || {}), ...(sys || {}) };
   }, [], ['restaurant_profile', 'restaurant_settings']);
 
-  // H-3 Fix: Reset billing state when switching tables to prevent data leaks
+  const selectedTable = occupiedTables.find(t => t.id === selectedTableId);
+
+  // Sync billing state when switching tables
   useEffect(() => {
     setPaymentMethod('Cash');
-    setDiscountAmount('');
-    setDiscountType('amount');
-    setCustomerName('');
-    setCustomerPhone('');
     setShowCustomer(false);
     setShowDiscount(false);
     setBillingMobileTab('receipt');
+    if (selectedTable) {
+      setCustomerName(selectedTable.customerName || '');
+      setCustomerPhone(selectedTable.customerPhone || '');
+      let discAmount = selectedTable.discountAmount || '';
+      let discType = selectedTable.discountType || 'amount';
+      let discReason = selectedTable.discountReason || '';
+      if (!discAmount) {
+        try {
+          const saved = localStorage.getItem(`table_discount_meta_${selectedTable.id}`);
+          if (saved) {
+            const p = JSON.parse(saved);
+            discAmount = p.discountAmount || '';
+            discType = p.discountType || 'amount';
+            discReason = p.discountReason || '';
+          }
+        } catch (_) {}
+      }
+      setDiscountAmount(discAmount);
+      setDiscountType(discType);
+      setDiscountReason(discReason);
+    } else {
+      setCustomerName('');
+      setCustomerPhone('');
+      setDiscountAmount('');
+      setDiscountType('amount');
+      setDiscountReason('');
+    }
   }, [selectedTableId]);
+
+  const subtotal = selectedTable ? selectedTable.orders.reduce((sum, item) => sum + ((item?.menuItem?.price ?? 0) * (item?.quantity ?? 0)), 0) : 0;
+
+  // Auto-apply festival discount if active in restaurant profile and table has no manual override
+  useEffect(() => {
+    const isFestivalActive = Boolean(
+      globalSettings?.festivalDiscountEnabled || 
+      localStorage.getItem('festivalDiscountEnabled') === 'true'
+    );
+    const festivalVal = String(localStorage.getItem('festivalDiscountValue') || globalSettings?.festivalDiscountValue || '10');
+    const festivalType = (localStorage.getItem('festivalDiscountType') || globalSettings?.festivalDiscountType || 'percentage') as 'amount' | 'percentage';
+    const festivalReason = localStorage.getItem('festivalDiscountName') || globalSettings?.festivalDiscountName || 'Festival Offer';
+    const minOrder = Number(localStorage.getItem('festivalDiscountMinOrder') || globalSettings?.festivalDiscountMinOrder || 0);
+
+    if (!selectedTable || !isFestivalActive || !(Number(festivalVal) > 0)) {
+      if (discountReason && discountReason === festivalReason) {
+        setDiscountAmount('');
+        setDiscountReason('');
+      }
+      return;
+    }
+    try {
+      const saved = localStorage.getItem(`table_discount_meta_${selectedTable.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.manualOverride) return;
+      }
+    } catch (_) {}
+
+    if (!discountAmount || discountReason === festivalReason) {
+      if (subtotal >= minOrder && subtotal > 0) {
+        setDiscountAmount(festivalVal);
+        setDiscountType(festivalType);
+        setDiscountReason(festivalReason);
+      } else if (discountReason === festivalReason && (subtotal < minOrder || subtotal === 0)) {
+        setDiscountAmount('');
+        setDiscountReason('');
+      }
+    }
+  }, [selectedTable?.id, globalSettings?.festivalDiscountEnabled, globalSettings?.festivalDiscountValue, globalSettings?.festivalDiscountType, globalSettings?.festivalDiscountName, globalSettings?.festivalDiscountMinOrder, subtotal]);
 
   if (occupiedTables.length === 0) {
     return (
@@ -87,10 +153,9 @@ export default function Billing({ tables, onSettleBill }: Props) {
     );
   }
 
-  const selectedTable = occupiedTables.find(t => t.id === selectedTableId);
-  const subtotal = selectedTable ? selectedTable.orders.reduce((sum, item) => sum + ((item?.menuItem?.price ?? 0) * (item?.quantity ?? 0)), 0) : 0;
   const rawDiscount = Math.max(0, Number(discountAmount) || 0);
-  const discountVal = discountType === 'percentage' ? (subtotal * (rawDiscount / 100)) : rawDiscount;
+  const calculatedDiscount = discountType === 'percentage' ? (subtotal * (rawDiscount / 100)) : rawDiscount;
+  const discountVal = Math.min(subtotal, Math.max(0, Math.round(calculatedDiscount)));
   const taxableAmount = Math.max(0, subtotal - discountVal);
   const gstPerc = globalSettings?.gstPercentage ?? 5;
   const tax = taxableAmount * (gstPerc / 100);
@@ -162,6 +227,9 @@ export default function Billing({ tables, onSettleBill }: Props) {
         timestamp: billTimestamp,
         billNumber: currentSeq,
         discount: discountVal,
+        discountType,
+        discountRate: discountAmount,
+        discountReason: discountReason || undefined,
         customerName,
         customerPhone,
         data: { shouldPrint }
@@ -175,7 +243,25 @@ export default function Billing({ tables, onSettleBill }: Props) {
 
       if (shouldPrint) {
         try {
-          await ThermalPrinter.printReceipt(selectedTable.id, selectedTable.orders, subtotal, tax, total, paymentMethod, currentSeq, globalSettings, discountVal, customerName, customerPhone, billTimestamp);
+          await ThermalPrinter.printReceipt(
+            selectedTable.id, 
+            selectedTable.orders, 
+            subtotal, 
+            tax, 
+            total, 
+            paymentMethod, 
+            currentSeq, 
+            globalSettings, 
+            discountVal, 
+            customerName, 
+            customerPhone, 
+            billTimestamp,
+            {
+              type: discountType,
+              rate: discountAmount,
+              reason: discountReason
+            }
+          );
         } catch (printErr) {
           console.error("Printing failed, but saving/settling bill:", printErr);
         }
@@ -295,7 +381,7 @@ export default function Billing({ tables, onSettleBill }: Props) {
             </div>
             {discountVal > 0 && (
               <div className="flex justify-between mb-3 text-green-600 dark:text-green-400 font-bold text-sm">
-                <span>Discount</span>
+                <span>{discountReason ? `${discountReason} ` : ''}{discountType === 'percentage' ? `Discount (${discountAmount}%)` : `Discount (Flat)`}</span>
                 <span>-₹{discountVal.toFixed(2)}</span>
               </div>
             )}
@@ -381,6 +467,9 @@ export default function Billing({ tables, onSettleBill }: Props) {
                           setCustomerName(c.name);
                           setCustomerPhone(c.phone);
                           setCustomerSuggestions([]);
+                          if (selectedTable) {
+                            db.activeOrders.update(selectedTable.id, { customerName: c.name, customerPhone: c.phone });
+                          }
                         }}
                         className="px-3 py-2 text-left hover:bg-gray-100 dark:hover:bg-slate-800 flex justify-between items-center text-xs font-bold text-gray-700 dark:text-slate-300 transition-colors w-full"
                       >
@@ -400,8 +489,21 @@ export default function Billing({ tables, onSettleBill }: Props) {
                     title="Discount Type"
                     value={discountType}
                     onChange={e => {
-                      setDiscountType(e.target.value as 'amount'|'percentage');
+                      const newType = e.target.value as 'amount'|'percentage';
+                      setDiscountType(newType);
                       setDiscountAmount('');
+                      setDiscountReason('');
+                      if (selectedTable) {
+                        try {
+                          localStorage.setItem(`table_discount_meta_${selectedTable.id}`, JSON.stringify({
+                            discountAmount: '',
+                            discountType: newType,
+                            discountReason: '',
+                            manualOverride: true
+                          }));
+                        } catch (_) {}
+                        db.activeOrders.update(selectedTable.id, { discountType: newType, discountAmount: '', discountReason: undefined });
+                      }
                     }}
                     className="p-3 border border-gray-200 dark:border-slate-700 rounded-xl text-sm font-black focus:outline-none focus:border-orange-500 bg-gray-50 dark:bg-slate-800 dark:text-slate-200 cursor-pointer w-2/5"
                   >
@@ -414,7 +516,22 @@ export default function Billing({ tables, onSettleBill }: Props) {
                       type="number" 
                       placeholder="Value"
                       value={discountAmount}
-                      onChange={e => setDiscountAmount(e.target.value)}
+                      onChange={e => {
+                        const newAmount = e.target.value;
+                        setDiscountAmount(newAmount);
+                        setDiscountReason('');
+                        if (selectedTable) {
+                          try {
+                            localStorage.setItem(`table_discount_meta_${selectedTable.id}`, JSON.stringify({
+                              discountAmount: newAmount,
+                              discountType,
+                              discountReason: '',
+                              manualOverride: true
+                            }));
+                          } catch (_) {}
+                          db.activeOrders.update(selectedTable.id, { discountAmount: newAmount, discountReason: undefined });
+                        }
+                      }}
                       className="w-full pl-8 p-3 border border-gray-200 dark:border-slate-700 rounded-xl text-sm font-black focus:outline-none focus:border-orange-500 dark:bg-slate-900 dark:text-slate-100"
                     />
                   </div>
@@ -424,7 +541,13 @@ export default function Billing({ tables, onSettleBill }: Props) {
                     {[5, 10, 15, 20, 25].map(perc => (
                       <button 
                         key={perc}
-                        onClick={() => setDiscountAmount(perc.toString())}
+                        onClick={() => {
+                          const newAmount = perc.toString();
+                          setDiscountAmount(newAmount);
+                          if (selectedTable) {
+                            db.activeOrders.update(selectedTable.id, { discountAmount: newAmount, discountType: 'percentage' });
+                          }
+                        }}
                         className={`flex-1 py-2.5 px-1.5 rounded-lg text-xs font-bold transition-all border ${discountAmount === perc.toString() ? 'bg-orange-500 text-white border-orange-500 shadow-sm' : 'bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-700 hover:bg-gray-100 dark:hover:bg-slate-700'}`}
                       >
                         {perc}%

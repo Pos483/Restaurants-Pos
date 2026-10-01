@@ -87,7 +87,12 @@ export async function processPrintQueue() {
             b.discount || 0,
             b.customerName || '',
             b.customerPhone || '',
-            b.timestamp
+            b.timestamp,
+            {
+              type: b.discountType,
+              rate: b.discountRate,
+              reason: b.discountReason
+            }
           );
         } else if (job.type === 'kds_orders') {
           const k = job.record;
@@ -183,7 +188,12 @@ export async function handleCloudAutoPrint(table: string, record: any) {
             b.discount || 0,
             b.customerName || '',
             b.customerPhone || '',
-            b.timestamp
+            b.timestamp,
+            {
+              type: b.discountType,
+              rate: b.discountRate,
+              reason: b.discountReason
+            }
           );
           logger.log('[CloudPrint] Bill printed successfully:', b.billNumber);
         } catch (printErr) {

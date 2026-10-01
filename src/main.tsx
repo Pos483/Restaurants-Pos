@@ -58,7 +58,7 @@ if (typeof window !== 'undefined') {
 // Capitalizes first letter of every word as user types, in all text inputs
 // and textareas, EXCEPT email, password, url, date, time, month, week, search fields.
 if (typeof window !== 'undefined') {
-  const SKIP_TYPES = new Set(['email', 'password', 'url', 'date', 'time', 'month', 'week', 'search', 'color', 'file', 'range']);
+  const SKIP_TYPES = new Set(['number', 'tel', 'email', 'password', 'url', 'date', 'time', 'month', 'week', 'search', 'color', 'file', 'range', 'checkbox', 'radio', 'button', 'submit', 'reset', 'hidden']);
   const SKIP_ATTR = 'data-no-capitalize'; // add this attribute to opt out any specific input
 
   let _isCapitalizing = false;

@@ -25,6 +25,9 @@ export type MergedTableSnapshot = {
   orders: OrderItem[];
   customerName?: string;
   customerPhone?: string;
+  discountAmount?: string;
+  discountType?: 'amount' | 'percentage';
+  discountReason?: string;
 };
 
 export type Table = {
@@ -34,6 +37,9 @@ export type Table = {
   tablePin?: string;
   customerName?: string;
   customerPhone?: string;
+  discountAmount?: string;
+  discountType?: 'amount' | 'percentage';
+  discountReason?: string;
   mergedTableIds?: number[];
   mergedSnapshots?: MergedTableSnapshot[];
 };

@@ -327,6 +327,17 @@ export const setupRealtime = (userId: string) => {
             if (table === 'active_orders') {
               localRecord.id = Number(localRecord.id);
               await dexieTable.delete(String(localRecord.id));
+              try {
+                const saved = localStorage.getItem(`table_discount_meta_${localRecord.id}`);
+                if (saved) {
+                  const parsed = JSON.parse(saved);
+                  if (parsed.discountAmount) {
+                    (localRecord as any).discountAmount = parsed.discountAmount;
+                    (localRecord as any).discountType = parsed.discountType;
+                    (localRecord as any).discountReason = parsed.discountReason;
+                  }
+                }
+              } catch (_) {}
             }
 
             await dexieTable.put(localRecord);

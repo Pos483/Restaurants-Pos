@@ -284,7 +284,12 @@ export default function Dashboard() {
         bill.discount,
         bill.customerName,
         bill.customerPhone,
-        bill.timestamp
+        bill.timestamp,
+        {
+          type: bill.discountType,
+          rate: bill.discountRate,
+          reason: bill.discountReason
+        }
       );
     } catch (err: any) {
       console.error("Reprint failed:", err);
@@ -394,7 +399,8 @@ export default function Dashboard() {
     if (!discountingBill) return;
     
     const rawDiscount = Number(amount) || 0;
-    const discountVal = type === 'percentage' ? (discountingBill.subtotal * (rawDiscount / 100)) : rawDiscount;
+    const calculatedDiscount = type === 'percentage' ? (discountingBill.subtotal * (rawDiscount / 100)) : rawDiscount;
+    const discountVal = Math.min(discountingBill.subtotal, Math.max(0, Math.round(calculatedDiscount)));
     const taxableAmount = Math.max(0, discountingBill.subtotal - discountVal);
     const gstPerc = globalSettings?.gstPercentage ?? 5;
     const tax = taxableAmount * (gstPerc / 100);
@@ -409,6 +415,8 @@ export default function Dashboard() {
     // M-2 Fix: Only update changed fields to avoid overwriting concurrent changes
     const partialUpdate = {
        discount: discountVal,
+       discountType: type,
+       discountRate: amount,
        tax: tax,
        total: finalTotal,
        paymentMethod: newPaymentMethod
@@ -517,7 +525,7 @@ export default function Dashboard() {
          
          <div style="font-size: 10px; text-align: right; line-height: 1.5; ${isCancelled ? 'color: #888;' : ''}">
             Subtotal: Rs ${bill.subtotal.toFixed(2)}<br>
-            ${(bill.discount && bill.discount > 0) ? `Discount: -Rs ${bill.discount.toFixed(2)}<br>` : ''}
+            ${(bill.discount && bill.discount > 0) ? `${escapeHtml(bill.discountReason || (bill.discountType === 'percentage' && bill.discountRate ? `Discount (${bill.discountRate}%)` : bill.discountType === 'amount' ? `Discount (Flat)` : 'Discount'))}: -Rs ${bill.discount.toFixed(2)}<br>` : ''}
             GST (${globalSettings?.gstPercentage || 5}%): Rs ${bill.tax.toFixed(2)}
          </div>
          
@@ -868,7 +876,10 @@ export default function Dashboard() {
               <div className="flex flex-col gap-1 text-sm font-medium text-gray-500 dark:text-slate-400 mb-4">
                 <div className="flex justify-between"><span>Subtotal</span><span>₹{viewBill.subtotal.toFixed(2)}</span></div>
                 {viewBill.discount && viewBill.discount > 0 && (
-                  <div className="flex justify-between text-green-600 dark:text-green-400 font-bold"><span>Discount</span><span>-₹{viewBill.discount.toFixed(2)}</span></div>
+                  <div className="flex justify-between text-green-600 dark:text-green-400 font-bold">
+                    <span>{viewBill.discountReason || (viewBill.discountType === 'percentage' && viewBill.discountRate ? `Discount (${viewBill.discountRate}%)` : viewBill.discountType === 'amount' ? `Discount (Flat)` : 'Discount')}</span>
+                    <span>-₹{viewBill.discount.toFixed(2)}</span>
+                  </div>
                 )}
                 <div className="flex justify-between"><span>GST</span><span>₹{viewBill.tax.toFixed(2)}</span></div>
               </div>

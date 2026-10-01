@@ -631,7 +631,12 @@ export class ThermalPrinter {
     discount: number = 0,
     customerName: string = '',
     customerPhone: string = '',
-    billDate?: Date | number | string
+    billDate?: Date | number | string,
+    discountMeta?: {
+      type?: 'amount' | 'percentage';
+      rate?: number | string;
+      reason?: string;
+    }
   ) {
     const printerMode = settings?.printerMode || 'single';
     const activePort = printerMode === 'multiple' ? this.receiptPort : (this.port || this.receiptPort);
@@ -731,7 +736,15 @@ export class ThermalPrinter {
         receipt += separator;
         receipt += RIGHT + `${t.totals.subtotal}: ${t.currency.symbol} ${subtotal.toFixed(2)}\n`;
         if (discount > 0) {
-          receipt += `${t.totals.discount}: -${t.currency.symbol} ${discount.toFixed(2)}\n`;
+          let discLabel = t.totals.discount;
+          if (discountMeta?.reason) {
+            discLabel = `${discountMeta.reason}${discountMeta.type === 'percentage' && discountMeta.rate ? ` (${discountMeta.rate}%)` : discountMeta.type === 'amount' && discountMeta.rate ? ` (Flat ₹${discountMeta.rate})` : ''}`;
+          } else if (discountMeta?.type === 'percentage' && discountMeta.rate) {
+            discLabel = `${t.totals.discount} (${discountMeta.rate}%)`;
+          } else if (discountMeta?.type === 'amount') {
+            discLabel = `${t.totals.discount} (Flat)`;
+          }
+          receipt += `${discLabel}: -${t.currency.symbol} ${discount.toFixed(2)}\n`;
         }
         if (settings?.gstPercentage > 0) {
           receipt += `${t.totals.gst} (${settings.gstPercentage}%): ${t.currency.symbol} ${tax.toFixed(2)}\n`;

@@ -32,6 +32,9 @@ export interface DBBill {
   tax: number;
   total: number;
   discount?: number;
+  discountType?: 'amount' | 'percentage';
+  discountRate?: number | string;
+  discountReason?: string;
   customerName?: string;
   customerPhone?: string;
   paymentMethod: string;
@@ -53,6 +56,11 @@ export interface DBRestaurantProfile {
   upiEnabled?: boolean;
   thankYouMessage?: string;
   gstPercentage: number;
+  festivalDiscountEnabled?: boolean;
+  festivalDiscountName?: string;
+  festivalDiscountType?: 'percentage' | 'amount';
+  festivalDiscountValue?: number;
+  festivalDiscountMinOrder?: number;
   subscriptionStatus?: 'trial' | 'premium';
   subscriptionPlan?: 'free-trial' | 'monthly' | 'half-yearly' | 'yearly' | 'lifetime';
   subscriptionExpiry?: number;

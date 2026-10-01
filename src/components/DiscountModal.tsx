@@ -15,6 +15,19 @@ export default function DiscountModal({ initialAmount, initialType, onSave, onCl
   const [amount, setAmount] = useState(initialAmount);
   const [type, setType] = useState(initialType);
 
+  const handleApply = () => {
+    const val = Number(amount);
+    if (amount && (isNaN(val) || val < 0)) {
+      showToast('Please enter a valid positive number for discount!', 'error');
+      return;
+    }
+    if (type === 'percentage' && val > 100) {
+      showToast('Discount percentage cannot be more than 100%!', 'error');
+      return;
+    }
+    onSave(amount, type);
+  };
+
   return (
     <div className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="glass-modal rounded-3xl p-6 w-full max-w-lg max-h-[95vh] overflow-y-auto flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
@@ -49,6 +62,12 @@ export default function DiscountModal({ initialAmount, initialType, onSave, onCl
                 const val = e.target.value.replace(/[^0-9.]/g, '');
                 const parts = val.split('.');
                 setAmount(parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : val);
+              }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleApply();
+                }
               }}
               autoFocus
               className="w-full py-4 text-base font-black focus:outline-none bg-transparent dark:text-white transition-colors"
@@ -85,18 +104,7 @@ export default function DiscountModal({ initialAmount, initialType, onSave, onCl
           <button onClick={() => onSave('', type)} className="flex-1 py-4 bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-600 dark:text-slate-300 rounded-xl font-bold transition-all">
             Remove
           </button>
-          <button onClick={() => {
-            const val = Number(amount);
-            if (amount && (isNaN(val) || val < 0)) {
-              showToast('Please enter a valid positive number for discount!', 'error');
-              return;
-            }
-            if (type === 'percentage' && val > 100) {
-              showToast('Discount percentage cannot be more than 100%!', 'error');
-              return;
-            }
-            onSave(amount, type);
-          }} className="flex-[2] py-4 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-200 dark:shadow-indigo-900/30 transition-all">
+          <button onClick={handleApply} className="flex-[2] py-4 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-200 dark:shadow-indigo-900/30 transition-all">
             Apply Discount
           </button>
         </div>

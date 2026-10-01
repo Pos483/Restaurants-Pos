@@ -34,7 +34,8 @@ import {
   RefreshCcw,
   AlertTriangle,
   XCircle,
-  Clock
+  Clock,
+  Tag
 } from 'lucide-react';
 import { ThermalPrinter } from '../printer';
 import { useToast } from './Toast';
@@ -123,7 +124,7 @@ export default function RestaurantSettings() {
     onlineTakeawayEnabled: true
   });
 
-  const [appVersion, setAppVersion] = useState(import.meta.env.VITE_APP_VERSION || '3.5.2');
+  const [appVersion, setAppVersion] = useState(import.meta.env.VITE_APP_VERSION || '3.5.3');
 
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
 
@@ -153,19 +154,28 @@ export default function RestaurantSettings() {
   }>({ type: 'idle', message: '' });
 
   const progressRef = useRef<HTMLDivElement>(null);
+  const isProfileLoadedRef = useRef(false);
 
   // ── Profile State ────────────────────────────────────────────────────────
-  const [profileFormData, setProfileFormData] = useState({
-    restaurantName: 'Restaurant POS',
-    phone: '',
-    email: '',
-    address: '',
-    gstNumber: '',
-    fssaiNumber: '',
-    gstPercentage: '5',
-    thankYouMessage: 'Thank You for Visiting! Please Visit Again',
-    upiId: '',
-    upiEnabled: false
+  const [profileFormData, setProfileFormData] = useState(() => {
+    const savedFestivalEnabled = localStorage.getItem('festivalDiscountEnabled');
+    return {
+      restaurantName: 'Restaurant POS',
+      phone: '',
+      email: '',
+      address: '',
+      gstNumber: '',
+      fssaiNumber: '',
+      gstPercentage: '5',
+      thankYouMessage: 'Thank You for Visiting! Please Visit Again',
+      upiId: '',
+      upiEnabled: false,
+      festivalDiscountEnabled: savedFestivalEnabled === 'true',
+      festivalDiscountName: localStorage.getItem('festivalDiscountName') || 'Festival Offer',
+      festivalDiscountType: (localStorage.getItem('festivalDiscountType') as 'percentage' | 'amount') || 'percentage',
+      festivalDiscountValue: localStorage.getItem('festivalDiscountValue') || '10',
+      festivalDiscountMinOrder: localStorage.getItem('festivalDiscountMinOrder') || '0'
+    };
   });
 
   const [copied, setCopied] = useState(false);
@@ -291,16 +301,91 @@ export default function RestaurantSettings() {
   const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const target = e.target as HTMLInputElement;
     if (target.type === 'checkbox') {
-      setProfileFormData({ ...profileFormData, [target.name]: target.checked });
+      setProfileFormData(prev => ({ ...prev, [target.name]: target.checked }));
     } else {
-      setProfileFormData({ ...profileFormData, [target.name]: target.value });
+      setProfileFormData(prev => ({ ...prev, [target.name]: target.value }));
+    }
+  };
+
+  const handleToggleFestivalDiscount = async () => {
+    const nextState = !profileFormData.festivalDiscountEnabled;
+
+    // 1. Update form state immediately
+    setProfileFormData(prev => ({ ...prev, festivalDiscountEnabled: nextState }));
+
+    // 2. Persist to localStorage for immediate resilience across renders/offline
+    try {
+      localStorage.setItem('festivalDiscountEnabled', String(nextState));
+      if (profileFormData.festivalDiscountName) localStorage.setItem('festivalDiscountName', profileFormData.festivalDiscountName);
+      if (profileFormData.festivalDiscountType) localStorage.setItem('festivalDiscountType', profileFormData.festivalDiscountType);
+      if (profileFormData.festivalDiscountValue) localStorage.setItem('festivalDiscountValue', profileFormData.festivalDiscountValue);
+      if (profileFormData.festivalDiscountMinOrder) localStorage.setItem('festivalDiscountMinOrder', profileFormData.festivalDiscountMinOrder);
+    } catch (_) {}
+
+    // 3. Immediately persist to db.restaurantProfile
+    try {
+      const existing = (await db.restaurantProfile.get('global')) || { id: 'global' };
+      await db.restaurantProfile.put({
+        ...existing,
+        id: 'global',
+        festivalDiscountEnabled: nextState,
+        festivalDiscountName: profileFormData.festivalDiscountName || 'Festival Offer',
+        festivalDiscountType: profileFormData.festivalDiscountType || 'percentage',
+        festivalDiscountValue: Number(profileFormData.festivalDiscountValue) || 10,
+        festivalDiscountMinOrder: Number(profileFormData.festivalDiscountMinOrder) || 0
+      } as any);
+
+      if (nextState) {
+        showToast('🎉 Festival Discount चालू हो गया! (Durga Puja, Diwali छूट सभी बिलों पर लागू होगी)', 'success');
+      } else {
+        showToast('Festival Discount बंद कर दिया गया।', 'info');
+      }
+    } catch (err: any) {
+      console.error('Failed to toggle festival discount:', err);
+      showToast(`Error saving festival discount: ${err.message || err}`, 'error');
+    }
+  };
+
+  const handleSaveFestivalDiscount = async () => {
+    try {
+      try {
+        localStorage.setItem('festivalDiscountEnabled', String(profileFormData.festivalDiscountEnabled));
+        localStorage.setItem('festivalDiscountName', profileFormData.festivalDiscountName || 'Festival Offer');
+        localStorage.setItem('festivalDiscountType', profileFormData.festivalDiscountType || 'percentage');
+        localStorage.setItem('festivalDiscountValue', profileFormData.festivalDiscountValue || '10');
+        localStorage.setItem('festivalDiscountMinOrder', profileFormData.festivalDiscountMinOrder || '0');
+      } catch (_) {}
+
+      const existing = (await db.restaurantProfile.get('global')) || { id: 'global' };
+      await db.restaurantProfile.put({
+        ...existing,
+        id: 'global',
+        festivalDiscountEnabled: Boolean(profileFormData.festivalDiscountEnabled),
+        festivalDiscountName: profileFormData.festivalDiscountName || 'Festival Offer',
+        festivalDiscountType: profileFormData.festivalDiscountType || 'percentage',
+        festivalDiscountValue: Number(profileFormData.festivalDiscountValue) || 0,
+        festivalDiscountMinOrder: Number(profileFormData.festivalDiscountMinOrder) || 0
+      } as any);
+      showToast('🎉 Festival Offer Settings सुरक्षित हो गईं!', 'success');
+    } catch (err: any) {
+      console.error('Error saving festival discount:', err);
+      showToast(`Error: ${err.message || err}`, 'error');
     }
   };
 
   const handleProfileSave = async () => {
     try {
+      try {
+        localStorage.setItem('festivalDiscountEnabled', String(profileFormData.festivalDiscountEnabled));
+        localStorage.setItem('festivalDiscountName', profileFormData.festivalDiscountName || 'Festival Offer');
+        localStorage.setItem('festivalDiscountType', profileFormData.festivalDiscountType || 'percentage');
+        localStorage.setItem('festivalDiscountValue', profileFormData.festivalDiscountValue || '10');
+        localStorage.setItem('festivalDiscountMinOrder', profileFormData.festivalDiscountMinOrder || '0');
+      } catch (_) {}
+
+      const existing = (await db.restaurantProfile.get('global')) || { id: 'global' };
       await db.restaurantProfile.put({
-        ...(globalSettings || {}),
+        ...existing,
         id: 'global',
         restaurantName: profileFormData.restaurantName,
         phone: profileFormData.phone,
@@ -311,7 +396,12 @@ export default function RestaurantSettings() {
         gstPercentage: Number(profileFormData.gstPercentage) || 0,
         thankYouMessage: profileFormData.thankYouMessage,
         upiId: profileFormData.upiId,
-        upiEnabled: profileFormData.upiEnabled
+        upiEnabled: Boolean(profileFormData.upiEnabled),
+        festivalDiscountEnabled: Boolean(profileFormData.festivalDiscountEnabled),
+        festivalDiscountName: profileFormData.festivalDiscountName || 'Festival Offer',
+        festivalDiscountType: profileFormData.festivalDiscountType || 'percentage',
+        festivalDiscountValue: Number(profileFormData.festivalDiscountValue) || 0,
+        festivalDiscountMinOrder: Number(profileFormData.festivalDiscountMinOrder) || 0
       } as any);
       showToast('Restaurant Profile Updated Successfully!');
     } catch (err: any) {
@@ -397,18 +487,31 @@ export default function RestaurantSettings() {
         onlineDeliveryEnabled: globalSettings.onlineDeliveryEnabled !== false,
         onlineTakeawayEnabled: globalSettings.onlineTakeawayEnabled !== false
       });
-      setProfileFormData({
-        restaurantName: globalSettings.restaurantName || 'Restaurant POS',
-        phone: globalSettings.phone || '',
-        email: globalSettings.email || '',
-        address: globalSettings.address || '',
-        gstNumber: globalSettings.gstNumber || '',
-        fssaiNumber: globalSettings.fssaiNumber || '',
-        gstPercentage: globalSettings.gstPercentage?.toString() || '5',
-        thankYouMessage: globalSettings.thankYouMessage || 'Thank You for Visiting! Please Visit Again',
-        upiId: globalSettings.upiId || '',
-        upiEnabled: globalSettings.upiEnabled || false
-      });
+      if (!isProfileLoadedRef.current) {
+        isProfileLoadedRef.current = true;
+        const savedFestivalEnabled = localStorage.getItem('festivalDiscountEnabled');
+        const isFestivalActive = savedFestivalEnabled !== null 
+          ? savedFestivalEnabled === 'true' 
+          : Boolean(globalSettings.festivalDiscountEnabled);
+
+        setProfileFormData({
+          restaurantName: globalSettings.restaurantName || 'Restaurant POS',
+          phone: globalSettings.phone || '',
+          email: globalSettings.email || '',
+          address: globalSettings.address || '',
+          gstNumber: globalSettings.gstNumber || '',
+          fssaiNumber: globalSettings.fssaiNumber || '',
+          gstPercentage: globalSettings.gstPercentage?.toString() || '5',
+          thankYouMessage: globalSettings.thankYouMessage || 'Thank You for Visiting! Please Visit Again',
+          upiId: globalSettings.upiId || '',
+          upiEnabled: globalSettings.upiEnabled || false,
+          festivalDiscountEnabled: isFestivalActive,
+          festivalDiscountName: globalSettings.festivalDiscountName || localStorage.getItem('festivalDiscountName') || 'Festival Offer',
+          festivalDiscountType: (globalSettings.festivalDiscountType as 'percentage' | 'amount') || (localStorage.getItem('festivalDiscountType') as 'percentage' | 'amount') || 'percentage',
+          festivalDiscountValue: globalSettings.festivalDiscountValue !== undefined ? globalSettings.festivalDiscountValue.toString() : (localStorage.getItem('festivalDiscountValue') || '10'),
+          festivalDiscountMinOrder: globalSettings.festivalDiscountMinOrder !== undefined ? globalSettings.festivalDiscountMinOrder.toString() : (localStorage.getItem('festivalDiscountMinOrder') || '0')
+        });
+      }
     }
   }, [globalSettings, currentLayout]);
 
@@ -885,17 +988,31 @@ export default function RestaurantSettings() {
                         </div>
                       </div>
 
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          name="upiEnabled"
-                          checked={profileFormData.upiEnabled}
-                          onChange={handleProfileChange}
-                          aria-label="Enable UPI QR code on receipts"
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-gray-300 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 dark:after:border-slate-600 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                      </label>
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        <span className={`text-xs font-black transition-colors ${
+                          profileFormData.upiEnabled 
+                            ? 'text-indigo-600 dark:text-indigo-400' 
+                            : 'text-gray-400 dark:text-slate-500'
+                        }`}>
+                          {profileFormData.upiEnabled ? 'ON' : 'OFF'}
+                        </span>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={profileFormData.upiEnabled}
+                          onClick={() => setProfileFormData(prev => ({ ...prev, upiEnabled: !prev.upiEnabled }))}
+                          aria-label="Toggle UPI QR Code"
+                          className={`w-12 h-6.5 rounded-full p-0.5 transition-colors duration-200 ease-in-out cursor-pointer relative shrink-0 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                            profileFormData.upiEnabled ? 'bg-indigo-600 shadow-sm shadow-indigo-500/40' : 'bg-gray-300 dark:bg-slate-700'
+                          }`}
+                        >
+                          <span
+                            className={`inline-block w-5 h-5 rounded-full bg-white shadow-md transform transition-transform duration-200 ease-in-out ${
+                              profileFormData.upiEnabled ? 'translate-x-5.5' : 'translate-x-0.5'
+                            }`}
+                          />
+                        </button>
+                      </div>
                     </div>
 
                     {profileFormData.upiEnabled && (
@@ -914,6 +1031,237 @@ export default function RestaurantSettings() {
                     )}
                   </div>
                 </div>
+              </div>
+
+              {/* Festival & Special Offer Discount Card */}
+              <div className={`border rounded-2xl p-5 flex flex-col gap-4 transition-all duration-300 shadow-sm ${
+                profileFormData.festivalDiscountEnabled
+                  ? 'bg-gradient-to-br from-amber-500/15 via-orange-500/10 to-amber-500/5 border-amber-400 dark:border-amber-700/80 shadow-[0_0_20px_rgba(245,158,11,0.12)]'
+                  : 'bg-gradient-to-br from-amber-500/5 via-orange-500/5 to-rose-500/5 border-gray-200 dark:border-slate-800'
+              }`}>
+                <div className="flex items-center justify-between gap-4">
+                  <div 
+                    onClick={handleToggleFestivalDiscount}
+                    className="flex items-center gap-3 min-w-0 cursor-pointer select-none group"
+                  >
+                    <div className={`p-2.5 rounded-xl shadow-md transition-all ${
+                      profileFormData.festivalDiscountEnabled 
+                        ? 'bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-amber-500/25 scale-105' 
+                        : 'bg-gray-150 dark:bg-slate-800 text-gray-500 dark:text-slate-400 group-hover:bg-amber-100 dark:group-hover:bg-slate-700'
+                    }`}>
+                      <Sparkles size={20} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-bold text-[10px] uppercase tracking-wider">
+                        Special Event / Festival Offer
+                        {profileFormData.festivalDiscountEnabled && (
+                          <span className="bg-amber-500 text-white text-[9px] px-2 py-0.2 rounded-full font-black tracking-normal uppercase animate-pulse">
+                            ACTIVE
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="text-base font-black text-gray-800 dark:text-slate-100 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+                        Festival & Auto Discount Offer (त्योहार / स्पेशल छूट)
+                      </h3>
+                      <p className="text-xs text-gray-500 dark:text-slate-400 truncate sm:whitespace-normal">
+                        Durga Puja, Diwali ya kisi bhi festival par sabhi bills par automatic discount chalayein.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    <span 
+                      onClick={handleToggleFestivalDiscount}
+                      className={`text-xs font-black cursor-pointer select-none transition-colors ${
+                        profileFormData.festivalDiscountEnabled 
+                          ? 'text-amber-600 dark:text-amber-400' 
+                          : 'text-gray-400 dark:text-slate-500'
+                      }`}
+                    >
+                      {profileFormData.festivalDiscountEnabled ? 'ON (चालू)' : 'OFF (बंद)'}
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={profileFormData.festivalDiscountEnabled}
+                      onClick={handleToggleFestivalDiscount}
+                      aria-label="Toggle Festival Discount"
+                      className={`w-12 h-6.5 rounded-full p-0.5 transition-colors duration-200 ease-in-out cursor-pointer relative shrink-0 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 ${
+                        profileFormData.festivalDiscountEnabled ? 'bg-amber-600 shadow-sm shadow-amber-500/40' : 'bg-gray-300 dark:bg-slate-700'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block w-5 h-5 rounded-full bg-white shadow-md transform transition-transform duration-200 ease-in-out ${
+                          profileFormData.festivalDiscountEnabled ? 'translate-x-5.5' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {profileFormData.festivalDiscountEnabled && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5 pt-3 border-t border-amber-200/60 dark:border-amber-900/40 animate-fade-in">
+                    <div className="flex flex-col gap-1.5 sm:col-span-2">
+                      <label className="text-xs font-bold text-gray-700 dark:text-slate-300 flex items-center gap-1">
+                        <Tag size={13} className="text-amber-600" /> Offer / Festival Name (ऑफर का नाम)
+                      </label>
+                      <input
+                        type="text"
+                        name="festivalDiscountName"
+                        value={profileFormData.festivalDiscountName}
+                        onChange={(e) => {
+                          const valStr = e.target.value;
+                          setProfileFormData(prev => ({ ...prev, festivalDiscountName: valStr }));
+                          try { localStorage.setItem('festivalDiscountName', valStr); } catch (_) {}
+                        }}
+                        placeholder="e.g. Durga Puja Discount, Diwali Offer"
+                        className="input-premium"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-bold text-gray-700 dark:text-slate-300">
+                        Discount Type (प्रकार)
+                      </label>
+                      <select
+                        name="festivalDiscountType"
+                        value={profileFormData.festivalDiscountType}
+                        onChange={(e) => {
+                          const val = e.target.value as 'percentage' | 'amount';
+                          setProfileFormData(prev => ({ ...prev, festivalDiscountType: val }));
+                          try { localStorage.setItem('festivalDiscountType', val); } catch (_) {}
+                        }}
+                        className="px-3 py-2.5 rounded-xl border border-gray-200 dark:border-slate-700 font-bold text-sm bg-white dark:bg-slate-800 text-gray-800 dark:text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer"
+                      >
+                        <option value="percentage">Percentage (% छूट)</option>
+                        <option value="amount">Flat Amount (₹ छूट)</option>
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-bold text-gray-700 dark:text-slate-300 flex items-center justify-between">
+                        <span>Discount Value ({profileFormData.festivalDiscountType === 'percentage' ? '%' : '₹'})</span>
+                        <span className="text-[10px] text-amber-600 font-black">{profileFormData.festivalDiscountValue || '0'}{profileFormData.festivalDiscountType === 'percentage' ? '%' : '₹'}</span>
+                      </label>
+                      
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const current = parseFloat(profileFormData.festivalDiscountValue) || 0;
+                            const step = profileFormData.festivalDiscountType === 'percentage' ? (current > 10 ? 5 : 1) : 10;
+                            const next = Math.max(0, current - step);
+                            const valStr = String(next);
+                            setProfileFormData(prev => ({ ...prev, festivalDiscountValue: valStr }));
+                            try { localStorage.setItem('festivalDiscountValue', valStr); } catch (_) {}
+                          }}
+                          className="w-10 h-10 flex items-center justify-center bg-gray-100 dark:bg-slate-800 hover:bg-amber-100 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-200 rounded-xl font-black text-lg transition-all shrink-0 select-none active:scale-90 border border-gray-200 dark:border-slate-700 cursor-pointer"
+                          title="Decrease discount"
+                        >
+                          −
+                        </button>
+                        
+                        <input
+                          type="number"
+                          step="any"
+                          name="festivalDiscountValue"
+                          value={profileFormData.festivalDiscountValue}
+                          onChange={(e) => {
+                            const valStr = e.target.value;
+                            setProfileFormData(prev => ({ ...prev, festivalDiscountValue: valStr }));
+                            try { localStorage.setItem('festivalDiscountValue', valStr); } catch (_) {}
+                          }}
+                          placeholder={profileFormData.festivalDiscountType === 'percentage' ? '10' : '50'}
+                          min="0"
+                          max={profileFormData.festivalDiscountType === 'percentage' ? '100' : '10000'}
+                          className="input-premium font-black text-center text-amber-600 dark:text-amber-400 text-base flex-1"
+                        />
+                        
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const current = parseFloat(profileFormData.festivalDiscountValue) || 0;
+                            const step = profileFormData.festivalDiscountType === 'percentage' ? (current >= 10 ? 5 : 1) : 10;
+                            const maxVal = profileFormData.festivalDiscountType === 'percentage' ? 100 : 10000;
+                            const next = Math.min(maxVal, current + step);
+                            const valStr = String(next);
+                            setProfileFormData(prev => ({ ...prev, festivalDiscountValue: valStr }));
+                            try { localStorage.setItem('festivalDiscountValue', valStr); } catch (_) {}
+                          }}
+                          className="w-10 h-10 flex items-center justify-center bg-gray-100 dark:bg-slate-800 hover:bg-amber-100 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-200 rounded-xl font-black text-lg transition-all shrink-0 select-none active:scale-90 border border-gray-200 dark:border-slate-700 cursor-pointer"
+                          title="Increase discount"
+                        >
+                          +
+                        </button>
+                      </div>
+
+                      {/* Quick Preset Buttons */}
+                      <div className="flex flex-wrap gap-1 mt-0.5">
+                        {(profileFormData.festivalDiscountType === 'percentage' 
+                          ? ['5', '10', '15', '20', '25', '30', '50'] 
+                          : ['20', '50', '100', '200', '500']
+                        ).map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => {
+                              setProfileFormData(prev => ({ ...prev, festivalDiscountValue: preset }));
+                              try { localStorage.setItem('festivalDiscountValue', preset); } catch (_) {}
+                            }}
+                            className={`px-2 py-0.5 rounded-lg text-[10px] font-black transition-all cursor-pointer select-none active:scale-95 ${
+                              String(profileFormData.festivalDiscountValue) === preset
+                                ? 'bg-amber-600 text-white shadow-sm shadow-amber-500/30'
+                                : 'bg-amber-500/15 text-amber-800 dark:text-amber-300 hover:bg-amber-500/25 border border-amber-300/40 dark:border-amber-800/40'
+                            }`}
+                          >
+                            {profileFormData.festivalDiscountType === 'percentage' ? `${preset}%` : `₹${preset}`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 sm:col-span-2">
+                      <label className="text-xs font-bold text-gray-700 dark:text-slate-300 flex items-center gap-1">
+                        Minimum Bill Amount (न्यूनतम बिल राशि ₹)
+                      </label>
+                      <input
+                        type="number"
+                        name="festivalDiscountMinOrder"
+                        value={profileFormData.festivalDiscountMinOrder}
+                        onChange={(e) => {
+                          const valStr = e.target.value;
+                          setProfileFormData(prev => ({ ...prev, festivalDiscountMinOrder: valStr }));
+                          try { localStorage.setItem('festivalDiscountMinOrder', valStr); } catch (_) {}
+                        }}
+                        placeholder="0 (Sabhi bills par apply karne ke liye 0 rakhein)"
+                        min="0"
+                        className="input-premium"
+                      />
+                      <span className="text-[10px] text-gray-400 dark:text-slate-500">
+                        0 rakhenge to har bill par automatic lagega.
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:col-span-2 bg-amber-500/10 dark:bg-amber-950/20 p-3.5 rounded-xl border border-amber-200/50 dark:border-amber-900/30">
+                      <div>
+                        <div className="text-xs font-black text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                          Receipt Preview:
+                        </div>
+                        <div className="text-xs font-mono font-bold text-gray-700 dark:text-slate-300 mt-0.5">
+                          {profileFormData.festivalDiscountName || 'Festival Offer'} {profileFormData.festivalDiscountType === 'percentage' ? `(${profileFormData.festivalDiscountValue || 0}%)` : `(Flat)`}: -₹XX.00
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSaveFestivalDiscount}
+                        className="px-4 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white rounded-xl font-bold shadow-md shadow-amber-500/20 active:scale-95 transition-all text-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+                      >
+                        <Save size={13} />
+                        Save Festival Offer (ऑफर सेव करें)
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Security Update */}
