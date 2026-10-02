@@ -173,7 +173,8 @@ export default function App() {
         customerName: undefined,
         customerPhone: undefined,
         discountAmount: undefined,
-        discountType: undefined
+        discountType: undefined,
+        discountReason: undefined
       });
       if (!result) {
         console.error('Settle bill: update returned falsy — bill may not have been saved.');

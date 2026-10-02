@@ -194,10 +194,22 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
     return { ...(profile || {}), ...(sys || {}) };
   }, [], ['restaurant_profile', 'restaurant_settings']);
 
+  // Force re-evaluation when festival discount settings change
+  const [festivalForceUpdate, setFestivalForceUpdate] = useState(0);
+  useEffect(() => {
+    const onFestivalChange = () => {
+      setFestivalForceUpdate(n => n + 1);
+    };
+    window.addEventListener('festival-discount-changed', onFestivalChange);
+    return () => window.removeEventListener('festival-discount-changed', onFestivalChange);
+  }, []);
+
   const subtotal = localOrders.reduce((sum, item) => sum + ((item.menuItem?.price || 0) * (item.quantity || 0)), 0);
 
   // Auto-apply festival discount if active in restaurant profile and table has no manual override
   useEffect(() => {
+    if (!table) return;
+
     const isFestivalActive = Boolean(
       globalSettings?.festivalDiscountEnabled || 
       localStorage.getItem('festivalDiscountEnabled') === 'true'
@@ -207,32 +219,88 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
     const festivalReason = localStorage.getItem('festivalDiscountName') || globalSettings?.festivalDiscountName || 'Festival Offer';
     const minOrder = Number(localStorage.getItem('festivalDiscountMinOrder') || globalSettings?.festivalDiscountMinOrder || 0);
 
-    if (!table || !isFestivalActive || !(Number(festivalVal) > 0)) {
-      if (discountReason && discountReason === festivalReason) {
-        setDiscountAmount('');
-        setDiscountReason('');
-      }
-      return;
-    }
+    let isManual = false;
+    let savedMeta: any = null;
     try {
       const saved = localStorage.getItem(`table_discount_meta_${table.id}`);
       if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.manualOverride) return;
+        savedMeta = JSON.parse(saved);
+        if (savedMeta.manualOverride) isManual = true;
       }
     } catch (_) {}
 
-    if (!discountAmount || discountReason === festivalReason) {
-      if (subtotal >= minOrder && subtotal > 0) {
+    // Case 1: Festival is NOT active or value is 0
+    if (!isFestivalActive || !(Number(festivalVal) > 0)) {
+      if (!isManual && (discountReason === festivalReason || savedMeta?.isFestival)) {
+        setDiscountAmount('');
+        setDiscountReason('');
+        try { localStorage.removeItem(`table_discount_meta_${table.id}`); } catch (_) {}
+        db.activeOrders.update(table.id, {
+          discountAmount: '',
+          discountReason: undefined
+        }).catch(() => {});
+      }
+      return;
+    }
+
+    // Case 2: Manual override was set by cashier -> Respect cashier's override
+    if (isManual) return;
+
+    // Case 3: Festival is active and table has qualifying order subtotal
+    const isQualifying = subtotal >= minOrder && subtotal > 0;
+
+    if (isQualifying) {
+      if (discountAmount !== festivalVal || discountType !== festivalType || discountReason !== festivalReason) {
         setDiscountAmount(festivalVal);
         setDiscountType(festivalType);
         setDiscountReason(festivalReason);
-      } else if (discountReason === festivalReason && (subtotal < minOrder || subtotal === 0)) {
+
+        try {
+          localStorage.setItem(`table_discount_meta_${table.id}`, JSON.stringify({
+            discountAmount: festivalVal,
+            discountType: festivalType,
+            discountReason: festivalReason,
+            manualOverride: false,
+            isFestival: true
+          }));
+        } catch (_) {}
+
+        db.activeOrders.update(table.id, {
+          discountAmount: festivalVal,
+          discountType: festivalType,
+          discountReason: festivalReason
+        }).catch(() => {});
+      }
+    } else if (!isQualifying && (discountReason === festivalReason || savedMeta?.isFestival)) {
+      if (discountAmount) {
         setDiscountAmount('');
         setDiscountReason('');
+        try {
+          localStorage.setItem(`table_discount_meta_${table.id}`, JSON.stringify({
+            discountAmount: '',
+            discountType: festivalType,
+            discountReason: '',
+            manualOverride: false,
+            isFestival: false
+          }));
+        } catch (_) {}
+
+        db.activeOrders.update(table.id, {
+          discountAmount: '',
+          discountReason: undefined
+        }).catch(() => {});
       }
     }
-  }, [table?.id, globalSettings?.festivalDiscountEnabled, globalSettings?.festivalDiscountValue, globalSettings?.festivalDiscountType, globalSettings?.festivalDiscountName, globalSettings?.festivalDiscountMinOrder, subtotal]);
+  }, [
+    table?.id, 
+    globalSettings?.festivalDiscountEnabled, 
+    globalSettings?.festivalDiscountValue, 
+    globalSettings?.festivalDiscountType, 
+    globalSettings?.festivalDiscountName, 
+    globalSettings?.festivalDiscountMinOrder, 
+    subtotal,
+    festivalForceUpdate
+  ]);
 
   // Set initial category when loaded
   useEffect(() => {
@@ -548,7 +616,7 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
   const taxableAmount = Math.max(0, subtotal - discountVal);
   const gstPerc = globalSettings?.gstPercentage ?? 5;
   const tax = taxableAmount * (gstPerc / 100);
-  const finalTotal = taxableAmount + tax;
+  const finalTotal = Math.max(0, Math.round(taxableAmount + tax));
 
   const effectiveMergedIds = getEffectiveMergedIds(table);
   const isMerged = effectiveMergedIds.length > 0;
@@ -1288,11 +1356,15 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
               </div>
               {discountVal > 0 && (
                 <div className="flex justify-between text-sm font-bold text-green-600 dark:text-green-400">
-                  <span className="flex items-center gap-1">
-                    <Tag size={12} />
-                    <span>{discountReason ? `${discountReason} ` : ''}{discountType === 'percentage' ? `Discount (${discountAmount}%)` : 'Discount (Flat)'}</span>
+                  <span className="flex items-center gap-1 min-w-0">
+                    <Tag size={12} className="shrink-0" />
+                    <span className="truncate">
+                      {discountReason 
+                        ? `${discountReason} (${discountType === 'percentage' ? `${discountAmount}%` : `Flat ₹${discountAmount || discountVal}`})`
+                        : (discountType === 'percentage' ? `Discount (${discountAmount}%)` : `Discount (Flat ₹${discountAmount || discountVal})`)}
+                    </span>
                   </span>
-                  <span>-₹{discountVal.toFixed(2)}</span>
+                  <span className="shrink-0 font-black">-₹{discountVal.toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between text-sm font-bold text-gray-500 dark:text-slate-400">
@@ -1441,25 +1513,35 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
         <DiscountModal
           initialAmount={discountAmount}
           initialType={discountType}
-          onSave={async (amount, type) => {
+          currentReason={discountReason}
+          festivalOffer={{
+            isActive: Boolean(globalSettings?.festivalDiscountEnabled || localStorage.getItem('festivalDiscountEnabled') === 'true'),
+            name: localStorage.getItem('festivalDiscountName') || globalSettings?.festivalDiscountName || 'Festival Offer',
+            type: (localStorage.getItem('festivalDiscountType') || globalSettings?.festivalDiscountType || 'percentage') as 'amount' | 'percentage',
+            value: localStorage.getItem('festivalDiscountValue') || globalSettings?.festivalDiscountValue || '10',
+            minOrder: Number(localStorage.getItem('festivalDiscountMinOrder') || globalSettings?.festivalDiscountMinOrder || 0)
+          }}
+          onSave={async (amount, type, manualOverride = true, reason = '') => {
             const num = Number(amount) || 0;
             const validAmount = num > 0 ? amount : '';
+            const finalReason = validAmount ? reason : '';
             setDiscountAmount(validAmount);
             setDiscountType(type);
-            setDiscountReason('');
+            setDiscountReason(finalReason);
             if (table) {
               try {
                 localStorage.setItem(`table_discount_meta_${table.id}`, JSON.stringify({
                   discountAmount: validAmount,
                   discountType: type,
-                  discountReason: '',
-                  manualOverride: true
+                  discountReason: finalReason,
+                  manualOverride: manualOverride,
+                  isFestival: !manualOverride && Boolean(finalReason)
                 }));
               } catch (_) {}
               await db.activeOrders.update(table.id, {
                 discountAmount: validAmount,
                 discountType: type,
-                discountReason: undefined
+                discountReason: finalReason || undefined
               });
             }
             setShowDiscount(false);

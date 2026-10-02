@@ -7,6 +7,7 @@ import { useToast } from '../components/Toast';
 import { usePremium } from './usePremium';
 import { parseAndValidateLicense } from '../utils/license';
 import { logger } from '../utils/logger';
+import { fetchFestivalDiscountFromServer } from '../utils/festivalCloudSync';
 
 // Module-level reusable AudioContext to avoid resource leaks (H-10)
 let _sharedAudioCtx: AudioContext | null = null;
@@ -253,6 +254,7 @@ export function useAppSetup() {
       const setup = async () => {
         await initDb();
         if (user.id) setupRealtime(user.id);
+        fetchFestivalDiscountFromServer().catch(() => {});
       };
       setup();
     }

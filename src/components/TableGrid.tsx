@@ -12,6 +12,12 @@ export default function TableGrid({ tables, onSelectTable, onAddTable, onOpenMer
   const occupiedCount = tables.filter(t => t.status === 'occupied').length;
   const availableCount = tables.filter(t => t.status !== 'occupied').length;
 
+  const isFestivalActive = Boolean(localStorage.getItem('festivalDiscountEnabled') === 'true');
+  const festivalVal = localStorage.getItem('festivalDiscountValue') || '10';
+  const festivalType = (localStorage.getItem('festivalDiscountType') || 'percentage') as 'amount' | 'percentage';
+  const festivalReason = localStorage.getItem('festivalDiscountName') || 'Festival Offer';
+  const minOrder = Number(localStorage.getItem('festivalDiscountMinOrder') || 0);
+
   const getTableMergedIds = (t: Table): number[] => {
     if (t.mergedTableIds && t.mergedTableIds.length > 0) return t.mergedTableIds;
     try {
@@ -65,17 +71,24 @@ export default function TableGrid({ tables, onSelectTable, onAddTable, onOpenMer
             let discAmount = table.discountAmount;
             let discType = table.discountType;
             let discReason = table.discountReason;
-            if (!discAmount) {
-              try {
-                const saved = localStorage.getItem(`table_discount_meta_${table.id}`);
-                if (saved) {
-                  const p = JSON.parse(saved);
-                  discAmount = p.discountAmount;
-                  discType = p.discountType;
-                  discReason = p.discountReason;
-                }
-              } catch (_) {}
+            let isManual = false;
+            try {
+              const saved = localStorage.getItem(`table_discount_meta_${table.id}`);
+              if (saved) {
+                const p = JSON.parse(saved);
+                if (p.manualOverride) isManual = true;
+                if (!discAmount && p.discountAmount) discAmount = p.discountAmount;
+                if (!discType && p.discountType) discType = p.discountType;
+                if (!discReason && p.discountReason) discReason = p.discountReason;
+              }
+            } catch (_) {}
+
+            if (!isManual && isFestivalActive && Number(festivalVal) > 0 && subtotal >= minOrder && subtotal > 0) {
+              discAmount = festivalVal;
+              discType = festivalType;
+              discReason = festivalReason;
             }
+
             const rawDiscount = Math.max(0, Number(discAmount) || 0);
             const calculatedDiscount = discType === 'percentage' ? (subtotal * (rawDiscount / 100)) : rawDiscount;
             const discountVal = Math.min(subtotal, Math.max(0, Math.round(calculatedDiscount)));

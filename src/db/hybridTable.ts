@@ -317,7 +317,17 @@ export class HybridTable<T extends BaseDBRecord> {
 
     // 2. Write to Supabase synchronously
     const row = this.toRow(record, userId);
-    const { error } = await supabase.from(this.tableName).upsert(row, { onConflict: 'app_user_id,id' });
+    let { error } = await supabase.from(this.tableName).upsert(row, { onConflict: 'app_user_id,id' });
+    if (error && this.tableName === 'restaurant_profile' && (error.message?.includes('festival_discount') || (error as any).code === 'PGRST204')) {
+      const fallbackRow = { ...row };
+      delete (fallbackRow as any).festival_discount_enabled;
+      delete (fallbackRow as any).festival_discount_name;
+      delete (fallbackRow as any).festival_discount_type;
+      delete (fallbackRow as any).festival_discount_value;
+      delete (fallbackRow as any).festival_discount_min_order;
+      const res = await supabase.from(this.tableName).upsert(fallbackRow, { onConflict: 'app_user_id,id' });
+      error = res.error;
+    }
     if (error) {
       // Rollback local Dexie write on server failure
       if (previousRecord) {
@@ -416,7 +426,17 @@ export class HybridTable<T extends BaseDBRecord> {
 
       // 2. Write to Supabase synchronously
       const row = this.toRow(updatedRecord, userId);
-      const { error } = await supabase.from(this.tableName).upsert(row, { onConflict: 'app_user_id,id' });
+      let { error } = await supabase.from(this.tableName).upsert(row, { onConflict: 'app_user_id,id' });
+      if (error && this.tableName === 'restaurant_profile' && (error.message?.includes('festival_discount') || (error as any).code === 'PGRST204')) {
+        const fallbackRow = { ...row };
+        delete (fallbackRow as any).festival_discount_enabled;
+        delete (fallbackRow as any).festival_discount_name;
+        delete (fallbackRow as any).festival_discount_type;
+        delete (fallbackRow as any).festival_discount_value;
+        delete (fallbackRow as any).festival_discount_min_order;
+        const res = await supabase.from(this.tableName).upsert(fallbackRow, { onConflict: 'app_user_id,id' });
+        error = res.error;
+      }
       if (error) {
         // Rollback local update on failure
         await this.dexieTable.put(previousRecord);
@@ -720,7 +740,35 @@ const categoriesTable = new HybridTable<DBCategory>(
 
 const restaurantProfileTable = new HybridTable<DBRestaurantProfile>(
   'restaurant_profile',
-  (r, uid) => ({ app_user_id: uid, id: r.id, restaurant_name: r.restaurantName, phone: r.phone, email: r.email, address: r.address, gst_number: r.gstNumber, fssai_number: r.fssaiNumber, restaurant_code: r.restaurantCode, upi_id: r.upiId, upi_enabled: r.upiEnabled, thank_you_message: r.thankYouMessage, gst_percentage: r.gstPercentage, subscription_status: r.subscriptionStatus, subscription_plan: r.subscriptionPlan, subscription_expiry: r.subscriptionExpiry, license_key: r.licenseKey, activation_date: r.activationDate, referred_by_reward_granted: r.referredByRewardGranted, referred_by: r.referredBy, referral_claimed: r.referralClaimed, updated_at: new Date().toISOString() }),
+  (r, uid) => ({
+    app_user_id: uid,
+    id: r.id,
+    restaurant_name: r.restaurantName,
+    phone: r.phone,
+    email: r.email,
+    address: r.address,
+    gst_number: r.gstNumber,
+    fssai_number: r.fssaiNumber,
+    restaurant_code: r.restaurantCode,
+    upi_id: r.upiId,
+    upi_enabled: r.upiEnabled,
+    thank_you_message: r.thankYouMessage,
+    gst_percentage: r.gstPercentage,
+    subscription_status: r.subscriptionStatus,
+    subscription_plan: r.subscriptionPlan,
+    subscription_expiry: r.subscriptionExpiry,
+    license_key: r.licenseKey,
+    activation_date: r.activationDate,
+    referred_by_reward_granted: r.referredByRewardGranted,
+    referred_by: r.referredBy,
+    referral_claimed: r.referralClaimed,
+    festival_discount_enabled: r.festivalDiscountEnabled !== undefined ? Boolean(r.festivalDiscountEnabled) : (localStorage.getItem('festivalDiscountEnabled') === 'true'),
+    festival_discount_name: r.festivalDiscountName || localStorage.getItem('festivalDiscountName') || 'Festival Offer',
+    festival_discount_type: r.festivalDiscountType || localStorage.getItem('festivalDiscountType') || 'percentage',
+    festival_discount_value: r.festivalDiscountValue !== undefined ? Number(r.festivalDiscountValue) : Number(localStorage.getItem('festivalDiscountValue') || 10),
+    festival_discount_min_order: r.festivalDiscountMinOrder !== undefined ? Number(r.festivalDiscountMinOrder) : Number(localStorage.getItem('festivalDiscountMinOrder') || 0),
+    updated_at: new Date().toISOString()
+  }),
   (r) => ({ 
     id: r.id, 
     restaurantName: r.restaurant_name ?? undefined, 
@@ -742,11 +790,11 @@ const restaurantProfileTable = new HybridTable<DBRestaurantProfile>(
     referredByRewardGranted: r.referred_by_reward_granted ?? false, 
     referredBy: r.referred_by ?? undefined, 
     referralClaimed: r.referral_claimed ?? false,
-    festivalDiscountEnabled: r.festival_discount_enabled !== undefined ? Boolean(r.festival_discount_enabled) : (r.festivalDiscountEnabled !== undefined ? Boolean(r.festivalDiscountEnabled) : false),
-    festivalDiscountName: r.festival_discount_name || r.festivalDiscountName || 'Festival Offer',
-    festivalDiscountType: (r.festival_discount_type || r.festivalDiscountType || 'percentage') as 'percentage' | 'amount',
-    festivalDiscountValue: r.festival_discount_value !== undefined ? Number(r.festival_discount_value) : (r.festivalDiscountValue !== undefined ? Number(r.festivalDiscountValue) : 10),
-    festivalDiscountMinOrder: r.festival_discount_min_order !== undefined ? Number(r.festival_discount_min_order) : (r.festivalDiscountMinOrder !== undefined ? Number(r.festivalDiscountMinOrder) : 0),
+    festivalDiscountEnabled: r.festival_discount_enabled !== undefined ? Boolean(r.festival_discount_enabled) : (r.festivalDiscountEnabled !== undefined ? Boolean(r.festivalDiscountEnabled) : (localStorage.getItem('festivalDiscountEnabled') === 'true')),
+    festivalDiscountName: r.festival_discount_name || r.festivalDiscountName || localStorage.getItem('festivalDiscountName') || 'Festival Offer',
+    festivalDiscountType: (r.festival_discount_type || r.festivalDiscountType || localStorage.getItem('festivalDiscountType') || 'percentage') as 'percentage' | 'amount',
+    festivalDiscountValue: r.festival_discount_value !== undefined ? Number(r.festival_discount_value) : (r.festivalDiscountValue !== undefined ? Number(r.festivalDiscountValue) : Number(localStorage.getItem('festivalDiscountValue') || 10)),
+    festivalDiscountMinOrder: r.festival_discount_min_order !== undefined ? Number(r.festival_discount_min_order) : (r.festivalDiscountMinOrder !== undefined ? Number(r.festivalDiscountMinOrder) : Number(localStorage.getItem('festivalDiscountMinOrder') || 0)),
   })
 );
 

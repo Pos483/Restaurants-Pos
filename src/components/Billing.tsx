@@ -105,10 +105,22 @@ export default function Billing({ tables, onSettleBill }: Props) {
     }
   }, [selectedTableId]);
 
+  // Force re-evaluation when festival discount settings change
+  const [festivalForceUpdate, setFestivalForceUpdate] = useState(0);
+  useEffect(() => {
+    const onFestivalChange = () => {
+      setFestivalForceUpdate(n => n + 1);
+    };
+    window.addEventListener('festival-discount-changed', onFestivalChange);
+    return () => window.removeEventListener('festival-discount-changed', onFestivalChange);
+  }, []);
+
   const subtotal = selectedTable ? selectedTable.orders.reduce((sum, item) => sum + ((item?.menuItem?.price ?? 0) * (item?.quantity ?? 0)), 0) : 0;
 
   // Auto-apply festival discount if active in restaurant profile and table has no manual override
   useEffect(() => {
+    if (!selectedTable) return;
+
     const isFestivalActive = Boolean(
       globalSettings?.festivalDiscountEnabled || 
       localStorage.getItem('festivalDiscountEnabled') === 'true'
@@ -118,32 +130,89 @@ export default function Billing({ tables, onSettleBill }: Props) {
     const festivalReason = localStorage.getItem('festivalDiscountName') || globalSettings?.festivalDiscountName || 'Festival Offer';
     const minOrder = Number(localStorage.getItem('festivalDiscountMinOrder') || globalSettings?.festivalDiscountMinOrder || 0);
 
-    if (!selectedTable || !isFestivalActive || !(Number(festivalVal) > 0)) {
-      if (discountReason && discountReason === festivalReason) {
-        setDiscountAmount('');
-        setDiscountReason('');
-      }
-      return;
-    }
+    let isManual = false;
+    let savedMeta: any = null;
     try {
       const saved = localStorage.getItem(`table_discount_meta_${selectedTable.id}`);
       if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.manualOverride) return;
+        savedMeta = JSON.parse(saved);
+        if (savedMeta.manualOverride) isManual = true;
       }
     } catch (_) {}
 
-    if (!discountAmount || discountReason === festivalReason) {
-      if (subtotal >= minOrder && subtotal > 0) {
+    // Case 1: Festival is NOT active or value is 0
+    if (!isFestivalActive || !(Number(festivalVal) > 0)) {
+      if (!isManual && (discountReason === festivalReason || savedMeta?.isFestival)) {
+        setDiscountAmount('');
+        setDiscountReason('');
+        try { localStorage.removeItem(`table_discount_meta_${selectedTable.id}`); } catch (_) {}
+        db.activeOrders.update(selectedTable.id, {
+          discountAmount: '',
+          discountReason: undefined
+        }).catch(() => {});
+      }
+      return;
+    }
+
+    // Case 2: Manual override was set by cashier -> Respect cashier's override
+    if (isManual) return;
+
+    // Case 3: Festival is active and table has qualifying order subtotal
+    const isQualifying = subtotal >= minOrder && subtotal > 0;
+    const isCurrentlyFestival = !discountAmount || discountReason === festivalReason || savedMeta?.isFestival || !savedMeta;
+
+    if (isQualifying && isCurrentlyFestival) {
+      if (discountAmount !== festivalVal || discountType !== festivalType || discountReason !== festivalReason) {
         setDiscountAmount(festivalVal);
         setDiscountType(festivalType);
         setDiscountReason(festivalReason);
-      } else if (discountReason === festivalReason && (subtotal < minOrder || subtotal === 0)) {
+
+        try {
+          localStorage.setItem(`table_discount_meta_${selectedTable.id}`, JSON.stringify({
+            discountAmount: festivalVal,
+            discountType: festivalType,
+            discountReason: festivalReason,
+            manualOverride: false,
+            isFestival: true
+          }));
+        } catch (_) {}
+
+        db.activeOrders.update(selectedTable.id, {
+          discountAmount: festivalVal,
+          discountType: festivalType,
+          discountReason: festivalReason
+        }).catch(() => {});
+      }
+    } else if (!isQualifying && (discountReason === festivalReason || savedMeta?.isFestival)) {
+      if (discountAmount) {
         setDiscountAmount('');
         setDiscountReason('');
+        try {
+          localStorage.setItem(`table_discount_meta_${selectedTable.id}`, JSON.stringify({
+            discountAmount: '',
+            discountType: festivalType,
+            discountReason: '',
+            manualOverride: false,
+            isFestival: false
+          }));
+        } catch (_) {}
+
+        db.activeOrders.update(selectedTable.id, {
+          discountAmount: '',
+          discountReason: undefined
+        }).catch(() => {});
       }
     }
-  }, [selectedTable?.id, globalSettings?.festivalDiscountEnabled, globalSettings?.festivalDiscountValue, globalSettings?.festivalDiscountType, globalSettings?.festivalDiscountName, globalSettings?.festivalDiscountMinOrder, subtotal]);
+  }, [
+    selectedTable?.id, 
+    globalSettings?.festivalDiscountEnabled, 
+    globalSettings?.festivalDiscountValue, 
+    globalSettings?.festivalDiscountType, 
+    globalSettings?.festivalDiscountName, 
+    globalSettings?.festivalDiscountMinOrder, 
+    subtotal,
+    festivalForceUpdate
+  ]);
 
   if (occupiedTables.length === 0) {
     return (
@@ -159,7 +228,7 @@ export default function Billing({ tables, onSettleBill }: Props) {
   const taxableAmount = Math.max(0, subtotal - discountVal);
   const gstPerc = globalSettings?.gstPercentage ?? 5;
   const tax = taxableAmount * (gstPerc / 100);
-  const total = taxableAmount + tax;
+  const total = Math.max(0, Math.round(taxableAmount + tax));
 
   const handlePrintAndSettle = async (shouldPrint: boolean = true) => {
     if (paymentMethod === 'Credit' && (!customerName.trim() || !customerPhone.trim())) {
@@ -381,7 +450,11 @@ export default function Billing({ tables, onSettleBill }: Props) {
             </div>
             {discountVal > 0 && (
               <div className="flex justify-between mb-3 text-green-600 dark:text-green-400 font-bold text-sm">
-                <span>{discountReason ? `${discountReason} ` : ''}{discountType === 'percentage' ? `Discount (${discountAmount}%)` : `Discount (Flat)`}</span>
+                <span>
+                  {discountReason 
+                    ? `${discountReason} (${discountType === 'percentage' ? `${discountAmount}%` : `Flat ₹${discountAmount || discountVal}`})`
+                    : (discountType === 'percentage' ? `Discount (${discountAmount}%)` : `Discount (Flat ₹${discountAmount || discountVal})`)}
+                </span>
                 <span>-₹{discountVal.toFixed(2)}</span>
               </div>
             )}

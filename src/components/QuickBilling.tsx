@@ -118,6 +118,16 @@ export default function QuickBilling() {
 
   const subtotal = cart.reduce((sum, item) => sum + ((item.menuItem?.price || 0) * (item.quantity || 0)), 0);
 
+  // Force re-evaluation when festival discount settings change
+  const [festivalForceUpdate, setFestivalForceUpdate] = useState(0);
+  useEffect(() => {
+    const onFestivalChange = () => {
+      setFestivalForceUpdate(n => n + 1);
+    };
+    window.addEventListener('festival-discount-changed', onFestivalChange);
+    return () => window.removeEventListener('festival-discount-changed', onFestivalChange);
+  }, []);
+
   // Auto-apply festival discount if active in restaurant profile and cashier hasn't manually overridden it
   useEffect(() => {
     const isFestivalActive = Boolean(
@@ -129,32 +139,71 @@ export default function QuickBilling() {
     const festivalReason = localStorage.getItem('festivalDiscountName') || globalSettings?.festivalDiscountName || 'Festival Offer';
     const minOrder = Number(localStorage.getItem('festivalDiscountMinOrder') || globalSettings?.festivalDiscountMinOrder || 0);
 
-    if (!isFestivalActive || !(Number(festivalVal) > 0)) {
-      if (discountReason && discountReason === festivalReason) {
-        setDiscountAmount('');
-        setDiscountReason('');
-      }
-      return;
-    }
+    let isManual = false;
+    let savedMeta: any = null;
     try {
       const saved = localStorage.getItem('quick_billing_discount');
       if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.manualOverride) return;
+        savedMeta = JSON.parse(saved);
+        if (savedMeta.manualOverride) isManual = true;
       }
     } catch (_) {}
 
-    if (!discountAmount || discountReason === festivalReason) {
-      if (subtotal >= minOrder && subtotal > 0) {
+    // Case 1: Festival is NOT active or value is 0
+    if (!isFestivalActive || !(Number(festivalVal) > 0)) {
+      if (!isManual && (discountReason === festivalReason || savedMeta?.isFestival)) {
+        setDiscountAmount('');
+        setDiscountReason('');
+        try { localStorage.removeItem('quick_billing_discount'); } catch (_) {}
+      }
+      return;
+    }
+
+    // Case 2: Manual override was set by cashier -> Respect cashier's override
+    if (isManual) return;
+
+    // Case 3: Festival is active and cart meets minimum order requirement
+    const isQualifying = subtotal >= minOrder && subtotal > 0;
+
+    if (isQualifying) {
+      if (discountAmount !== festivalVal || discountType !== festivalType || discountReason !== festivalReason) {
         setDiscountAmount(festivalVal);
         setDiscountType(festivalType);
         setDiscountReason(festivalReason);
-      } else if (discountReason === festivalReason && (subtotal < minOrder || subtotal === 0)) {
+        try {
+          localStorage.setItem('quick_billing_discount', JSON.stringify({
+            amount: festivalVal,
+            type: festivalType,
+            reason: festivalReason,
+            manualOverride: false,
+            isFestival: true
+          }));
+        } catch (_) {}
+      }
+    } else if (!isQualifying && (discountReason === festivalReason || savedMeta?.isFestival)) {
+      if (discountAmount) {
         setDiscountAmount('');
         setDiscountReason('');
+        try {
+          localStorage.setItem('quick_billing_discount', JSON.stringify({
+            amount: '',
+            type: festivalType,
+            reason: '',
+            manualOverride: false,
+            isFestival: false
+          }));
+        } catch (_) {}
       }
     }
-  }, [globalSettings?.festivalDiscountEnabled, globalSettings?.festivalDiscountValue, globalSettings?.festivalDiscountType, globalSettings?.festivalDiscountName, globalSettings?.festivalDiscountMinOrder, subtotal]);
+  }, [
+    globalSettings?.festivalDiscountEnabled, 
+    globalSettings?.festivalDiscountValue, 
+    globalSettings?.festivalDiscountType, 
+    globalSettings?.festivalDiscountName, 
+    globalSettings?.festivalDiscountMinOrder, 
+    subtotal,
+    festivalForceUpdate
+  ]);
 
   useEffect(() => {
     try {
@@ -461,7 +510,7 @@ export default function QuickBilling() {
     const taxableAmount = Math.max(0, subtotal - discountVal);
     const gstPerc = globalSettings?.gstPercentage ?? 5;
     const tax = taxableAmount * (gstPerc / 100);
-    const total = taxableAmount + tax;
+    const total = Math.max(0, Math.round(taxableAmount + tax));
 
     if (isSettleInProgress.current) { isSettleInProgressRef.current = false; return; }
     isSettleInProgress.current = true;
@@ -622,7 +671,7 @@ export default function QuickBilling() {
   const taxableAmount = Math.max(0, subtotal - discountVal);
   const gstPercDisplay = globalSettings?.gstPercentage ?? 5;
   const tax = taxableAmount * (gstPercDisplay / 100);
-  const total = taxableAmount + tax;
+  const total = Math.max(0, Math.round(taxableAmount + tax));
 
   const isSidebarLayout = categoryLayout === 'sidebar';
 
@@ -901,8 +950,10 @@ export default function QuickBilling() {
           <div className="flex justify-between text-[13px] font-bold text-gray-500 dark:text-slate-400">
             <span>Sub: ₹{subtotal.toFixed(2)}</span>
             {discountVal > 0 && (
-              <span className="text-emerald-600 dark:text-emerald-400">
-                -{discountReason ? `${discountReason} ` : ''}({discountType === 'percentage' ? `${discountAmount}%` : 'Flat'}) ₹{discountVal.toFixed(2)}
+              <span className="text-emerald-600 dark:text-emerald-400 truncate max-w-[50%]">
+                {discountReason 
+                  ? `${discountReason} (${discountType === 'percentage' ? `${discountAmount}%` : `Flat ₹${discountAmount || discountVal}`})`
+                  : (discountType === 'percentage' ? `Discount (${discountAmount}%)` : `Discount (Flat ₹${discountAmount || discountVal})`)}: -₹{discountVal.toFixed(2)}
               </span>
             )}
             <span>Tax: ₹{tax.toFixed(2)}</span>
@@ -1012,18 +1063,28 @@ export default function QuickBilling() {
         <DiscountModal
           initialAmount={discountAmount}
           initialType={discountType}
-          onSave={(amount, type) => {
+          currentReason={discountReason}
+          festivalOffer={{
+            isActive: Boolean(globalSettings?.festivalDiscountEnabled || localStorage.getItem('festivalDiscountEnabled') === 'true'),
+            name: localStorage.getItem('festivalDiscountName') || globalSettings?.festivalDiscountName || 'Festival Offer',
+            type: (localStorage.getItem('festivalDiscountType') || globalSettings?.festivalDiscountType || 'percentage') as 'amount' | 'percentage',
+            value: localStorage.getItem('festivalDiscountValue') || globalSettings?.festivalDiscountValue || '10',
+            minOrder: Number(localStorage.getItem('festivalDiscountMinOrder') || globalSettings?.festivalDiscountMinOrder || 0)
+          }}
+          onSave={(amount, type, manualOverride = true, reason = '') => {
             const num = Number(amount) || 0;
             const validAmount = num > 0 ? amount : '';
+            const finalReason = validAmount ? reason : '';
             setDiscountAmount(validAmount);
             setDiscountType(type);
-            setDiscountReason('');
+            setDiscountReason(finalReason);
             try {
               localStorage.setItem('quick_billing_discount', JSON.stringify({
                 amount: validAmount,
                 type,
-                reason: '',
-                manualOverride: true
+                reason: finalReason,
+                manualOverride: manualOverride,
+                isFestival: !manualOverride && Boolean(finalReason)
               }));
             } catch (e) {}
             setShowDiscount(false);
