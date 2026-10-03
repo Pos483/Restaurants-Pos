@@ -66,8 +66,9 @@ export default function TableGrid({ tables, onSelectTable, onAddTable, onOpenMer
       <div className="flex-1 overflow-y-auto pb-20 pr-1 scrollbar-hide">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
           {tables.map((table) => {
+            const tableOrders = table.orders || [];
             const isOccupied = table.status === 'occupied';
-            const subtotal = table.orders.reduce((sum, item) => sum + ((item?.menuItem?.price || 0) * (item?.quantity || 0)), 0);
+            const subtotal = tableOrders.reduce((sum, item) => sum + ((item?.menuItem?.price || 0) * (item?.quantity || 0)), 0);
             let discAmount = table.discountAmount;
             let discType = table.discountType;
             let discReason = table.discountReason;

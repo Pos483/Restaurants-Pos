@@ -87,12 +87,40 @@ export default function App() {
           }
         } catch (_) {}
       }
-      const itemWithDisc: Table = { ...t, id: numId, discountAmount: discAmount, discountType: discType, discountReason: discReason };
+
+      // Check for persistent active cart in localStorage if t.orders is empty
+      let tableOrders: OrderItem[] = Array.isArray(t.orders) ? [...t.orders] : [];
+      if (tableOrders.length === 0) {
+        try {
+          const savedCart = localStorage.getItem(`table_active_cart_${numId}`);
+          if (savedCart) {
+            const parsed = JSON.parse(savedCart);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              tableOrders = parsed;
+            }
+          }
+        } catch (_) {}
+      }
+
+      const itemWithDisc: Table = { 
+        ...t, 
+        id: numId, 
+        orders: tableOrders, 
+        discountAmount: discAmount, 
+        discountType: discType, 
+        discountReason: discReason 
+      };
+
       const existing = map.get(numId);
       if (!existing) {
         map.set(numId, itemWithDisc);
       } else {
-        if ((t.orders?.length || 0) > (existing.orders?.length || 0) || t.status === 'occupied') {
+        const existingOrderCount = existing.orders?.length || 0;
+        const currentOrderCount = itemWithDisc.orders?.length || 0;
+        // Never let an empty/0-order table overwrite a table that has orders
+        if (currentOrderCount > existingOrderCount) {
+          map.set(numId, itemWithDisc);
+        } else if (currentOrderCount === existingOrderCount && (itemWithDisc.status === 'occupied' || !existing.status)) {
           map.set(numId, itemWithDisc);
         }
       }
@@ -161,6 +189,7 @@ export default function App() {
     try {
       localStorage.removeItem(`table_discount_meta_${tableId}`);
       localStorage.removeItem(`table_merged_meta_${tableId}`);
+      localStorage.removeItem(`table_active_cart_${tableId}`);
     } catch (_) {}
 
     try {

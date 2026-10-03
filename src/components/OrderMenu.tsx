@@ -81,6 +81,17 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
   const pendingUpdateRef = useRef<{ tableId: number; orders: OrderItem[] } | null>(null);
   const debouncedUpdateRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isUnmergingRef = useRef(false);
+  const lastSavedOrdersStrRef = useRef<string>('');
+
+  const syncActiveCartToStorage = (tableId: number, orders: OrderItem[]) => {
+    try {
+      if (orders && orders.length > 0) {
+        localStorage.setItem(`table_active_cart_${tableId}`, JSON.stringify(orders));
+      } else {
+        localStorage.removeItem(`table_active_cart_${tableId}`);
+      }
+    } catch (_) {}
+  };
 
   const flushPendingUpdate = () => {
     if (debouncedUpdateRef.current) {
@@ -88,22 +99,34 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
       debouncedUpdateRef.current = null;
     }
     if (pendingUpdateRef.current) {
-      onUpdateOrder(pendingUpdateRef.current.tableId, pendingUpdateRef.current.orders);
+      const { tableId, orders } = pendingUpdateRef.current;
+      lastSavedOrdersStrRef.current = JSON.stringify(orders.map(o => ({ id: o.menuItem?.id || o.name, q: o.quantity })));
+      syncActiveCartToStorage(tableId, orders);
+      onUpdateOrder(tableId, orders);
       pendingUpdateRef.current = null;
     }
   };
 
   const queueUpdateOrder = (tableId: number, newOrders: OrderItem[]) => {
     pendingUpdateRef.current = { tableId, orders: newOrders };
+    syncActiveCartToStorage(tableId, newOrders);
+    lastSavedOrdersStrRef.current = JSON.stringify(newOrders.map(o => ({ id: o.menuItem?.id || o.name, q: o.quantity })));
+
     if (debouncedUpdateRef.current) {
       clearTimeout(debouncedUpdateRef.current);
     }
-    debouncedUpdateRef.current = setTimeout(() => {
-      if (pendingUpdateRef.current) {
-        onUpdateOrder(pendingUpdateRef.current.tableId, pendingUpdateRef.current.orders);
-        pendingUpdateRef.current = null;
+    debouncedUpdateRef.current = setTimeout(async () => {
+      if (pendingUpdateRef.current && pendingUpdateRef.current.tableId === tableId) {
+        const ordersToSave = pendingUpdateRef.current.orders;
+        try {
+          await onUpdateOrder(tableId, ordersToSave);
+        } finally {
+          if (pendingUpdateRef.current?.orders === ordersToSave) {
+            pendingUpdateRef.current = null;
+          }
+        }
       }
-    }, 600); // 600ms debounce
+    }, 400); // Responsive 400ms debounce
   };
 
   // Flush on unmount
@@ -113,7 +136,9 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
         clearTimeout(debouncedUpdateRef.current);
       }
       if (pendingUpdateRef.current) {
-        onUpdateOrder(pendingUpdateRef.current.tableId, pendingUpdateRef.current.orders);
+        const { tableId, orders } = pendingUpdateRef.current;
+        syncActiveCartToStorage(tableId, orders);
+        onUpdateOrder(tableId, orders);
       }
     };
   }, []);
@@ -123,7 +148,22 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
       flushPendingUpdate();
       lastTableIdRef.current = selectedTableId;
       if (table) {
-        setLocalOrders(table.orders || []);
+        let initialOrders: OrderItem[] = Array.isArray(table.orders) ? [...table.orders] : [];
+        if (initialOrders.length === 0) {
+          try {
+            const savedCart = localStorage.getItem(`table_active_cart_${table.id}`);
+            if (savedCart) {
+              const parsed = JSON.parse(savedCart);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                initialOrders = parsed;
+                // Re-sync to parent/db so table status is occupied
+                onUpdateOrder(table.id, initialOrders);
+              }
+            }
+          } catch (_) {}
+        }
+        setLocalOrders(initialOrders);
+        lastSavedOrdersStrRef.current = JSON.stringify(initialOrders.map(o => ({ id: o.menuItem?.id || o.name, q: o.quantity })));
         setCustomerName(table.customerName || '');
         setCustomerPhone(table.customerPhone || '');
         let discAmount = table.discountAmount;
@@ -143,23 +183,28 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
         setDiscountAmount(discAmount || '');
         setDiscountType(discType || 'amount');
         setDiscountReason(discReason || '');
-      } else {
-        setLocalOrders([]);
-        setCustomerName('');
-        setCustomerPhone('');
-        setDiscountAmount('');
-        setDiscountType('amount');
-        setDiscountReason('');
       }
     } else if (table) {
       if (isUnmergingRef.current || pendingUpdateRef.current) return;
 
-      // M-3 Fix: Compare JSON of items and quantities instead of fragile length heuristic
-      const localStr = JSON.stringify(localOrders.map(o => ({ id: o.menuItem?.id, q: o.quantity })));
-      const remoteStr = JSON.stringify((table.orders || []).map(o => ({ id: o.menuItem?.id, q: o.quantity })));
-      if (localStr !== remoteStr) {
-        setLocalOrders(table.orders);
-      }
+      const remoteOrders: OrderItem[] = Array.isArray(table.orders) ? table.orders : [];
+      const localStr = JSON.stringify(localOrders.map(o => ({ id: o.menuItem?.id || o.name, q: o.quantity })));
+      const remoteStr = JSON.stringify(remoteOrders.map(o => ({ id: o.menuItem?.id || o.name, q: o.quantity })));
+
+      // Already in sync
+      if (localStr === remoteStr) return;
+
+      // Echo of our own local save coming back from DB — do not re-trigger
+      if (remoteStr === lastSavedOrdersStrRef.current) return;
+
+      // CRITICAL: Protect against background sync lag or race conditions wiping out active cart
+      if (localOrders.length > 0 && remoteOrders.length === 0) return;
+
+      // Remote update from external source (e.g. self-order approval or another terminal)
+      setLocalOrders(remoteOrders);
+      syncActiveCartToStorage(table.id, remoteOrders);
+      lastSavedOrdersStrRef.current = remoteStr;
+
       if (table.customerName !== undefined && table.customerName !== customerName) {
         setCustomerName(table.customerName);
       }
@@ -581,17 +626,32 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
   };
 
   const tablesWithCurrentCart = sortedTables.map(t => {
-    if (table && t.id === table.id) {
-      return { ...t, orders: localOrders };
+    let effectiveOrders = t.orders || [];
+    if (table && t.id === table.id && localOrders.length > 0) {
+      effectiveOrders = localOrders;
+    } else if (effectiveOrders.length === 0) {
+      try {
+        const saved = localStorage.getItem(`table_active_cart_${t.id}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            effectiveOrders = parsed;
+          }
+        }
+      } catch (_) {}
     }
-    return t;
+    return {
+      ...t,
+      orders: effectiveOrders,
+      status: t.status
+    };
   });
 
   if (!table) {
     return (
       <>
         <TableGrid 
-          tables={sortedTables} 
+          tables={tablesWithCurrentCart} 
           onSelectTable={onSelectTable} 
           onAddTable={handleAddTable} 
           onOpenMergeModal={() => {
@@ -757,6 +817,7 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
       try {
         localStorage.removeItem(`table_merged_meta_${table.id}`);
         localStorage.removeItem(`table_discount_meta_${table.id}`);
+        localStorage.removeItem(`table_active_cart_${table.id}`);
       } catch (_) {}
       trackEvent('settle_bill', 'billing', paymentMethod, finalTotal);
 
@@ -960,25 +1021,28 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
   };
 
   const handleAddItem = (menuItem: MenuItem) => {
+    if (!menuItem) return;
     if (isOutOfStock(menuItem)) {
       showToast(`${menuItem.name} out of stock hai!`, 'error');
       return;
     }
-    const existingItem = localOrders.find(o => o.menuItem.id === menuItem.id);
-    let newOrders;
+    const targetId = menuItem.id;
+    const existingItem = localOrders.find(o => (o.menuItem?.id || o.name) === targetId);
+    let newOrders: OrderItem[];
     if (existingItem) {
       newOrders = localOrders.map(o => 
-        o.menuItem.id === menuItem.id ? { ...o, quantity: o.quantity + 1 } : o
+        (o.menuItem?.id || o.name) === targetId ? { ...o, quantity: o.quantity + 1 } : o
       );
     } else {
       newOrders = [...localOrders, { menuItem, quantity: 1 }];
     }
     setLocalOrders(newOrders);
+    syncActiveCartToStorage(table.id, newOrders);
     queueUpdateOrder(table.id, newOrders);
   };
 
   const handleAddCustomItem = (name: string, price: number, quantity: number) => {
-    const customItem = {
+    const customItem: MenuItem = {
       id: `custom-${Date.now()}`,
       name: name,
       price: price,
@@ -986,20 +1050,21 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
     };
     const newOrders = [...localOrders, { menuItem: customItem, quantity }];
     setLocalOrders(newOrders);
+    syncActiveCartToStorage(table.id, newOrders);
     queueUpdateOrder(table.id, newOrders);
     setShowCustomItem(false);
   };
 
   const handleRemoveItem = (menuItemId: string) => {
-    const existingItem = localOrders.find(o => o.menuItem.id === menuItemId);
+    const existingItem = localOrders.find(o => (o.menuItem?.id || o.name) === menuItemId);
     if (!existingItem) return;
 
-    let newOrders;
-    if (existingItem.quantity === 1) {
-      newOrders = localOrders.filter(o => o.menuItem.id !== menuItemId);
+    let newOrders: OrderItem[];
+    if (existingItem.quantity <= 1) {
+      newOrders = localOrders.filter(o => (o.menuItem?.id || o.name) !== menuItemId);
     } else {
       newOrders = localOrders.map(o => {
-        if (o.menuItem.id === menuItemId) {
+        if ((o.menuItem?.id || o.name) === menuItemId) {
           const newQty = o.quantity - 1;
           return { 
             ...o, 
@@ -1011,6 +1076,14 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
       });
     }
     setLocalOrders(newOrders);
+    syncActiveCartToStorage(table.id, newOrders);
+    queueUpdateOrder(table.id, newOrders);
+  };
+
+  const handleDeleteItem = (menuItemId: string) => {
+    const newOrders = localOrders.filter(o => (o.menuItem?.id || o.name) !== menuItemId);
+    setLocalOrders(newOrders);
+    syncActiveCartToStorage(table.id, newOrders);
     queueUpdateOrder(table.id, newOrders);
   };
 
@@ -1221,6 +1294,7 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
                 if (showMobileCart) {
                   setShowMobileCart(false);
                 } else {
+                  flushPendingUpdate();
                   onSelectTable(null);
                 }
               }} 
@@ -1292,27 +1366,35 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
           {localOrders.length === 0 ? (
             <div className="text-gray-400 text-center mt-10 font-medium dark:text-slate-500">No items added yet.</div>
           ) : (
-            <div className="flex flex-col gap-4">
-              {localOrders.map(order => (
-                <div key={order.menuItem.id} className="flex justify-between items-center min-w-0 gap-2">
-                  <div className="flex-1 min-w-0 pr-2">
-                    <div className="font-bold text-gray-700 dark:text-slate-200 truncate" title={order.menuItem.name}>{order.menuItem.name}</div>
-                    <div className="text-sm text-gray-400 font-medium dark:text-slate-400">₹{order.menuItem.price.toFixed(2)}</div>
+            <div className="flex flex-col gap-3">
+              {localOrders.map((order, idx) => {
+                const itemId = order.menuItem?.id || order.name || `item-${idx}`;
+                const itemName = order.menuItem?.name || order.name || 'Item';
+                const itemPrice = order.menuItem?.price ?? order.price ?? 0;
+                return (
+                  <div key={itemId} className="flex justify-between items-center min-w-0 gap-2 p-1 rounded-xl hover:bg-gray-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                    <div className="flex-1 min-w-0 pr-2">
+                      <div className="font-bold text-gray-700 dark:text-slate-200 truncate text-sm" title={itemName}>{itemName}</div>
+                      <div className="text-xs text-gray-400 font-medium dark:text-slate-400">₹{itemPrice.toFixed(2)}</div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button onClick={() => handleRemoveItem(itemId)} className="p-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-600 transition-colors dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 cursor-pointer" title="Decrease quantity">
+                        <Minus size={14} />
+                      </button>
+                      <span className="font-bold w-5 text-center dark:text-slate-200 text-sm">{order.quantity}</span>
+                      <button onClick={() => handleAddItem(order.menuItem || { id: itemId, name: itemName, price: itemPrice, category: 'Custom' })} className="p-1.5 bg-orange-100 rounded-lg hover:bg-orange-200 text-orange-600 transition-colors dark:bg-orange-950/40 dark:text-orange-400 dark:hover:bg-orange-900/60 cursor-pointer" title="Increase quantity">
+                        <Plus size={14} />
+                      </button>
+                      <button onClick={() => handleDeleteItem(itemId)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors cursor-pointer" title="Delete item from cart">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                    <div className="w-16 text-right font-bold text-gray-800 dark:text-slate-100 shrink-0 text-sm">
+                      ₹{(itemPrice * order.quantity).toFixed(2)}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <button onClick={() => handleRemoveItem(order.menuItem.id)} className="p-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-600 transition-colors dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700" title="Decrease quantity">
-                      <Minus size={16} />
-                    </button>
-                    <span className="font-bold w-4 text-center dark:text-slate-200">{order.quantity}</span>
-                    <button onClick={() => handleAddItem(order.menuItem)} className="p-1.5 bg-orange-100 rounded-lg hover:bg-orange-200 text-orange-600 transition-colors dark:bg-orange-950/40 dark:text-orange-400 dark:hover:bg-orange-900/60" title="Increase quantity">
-                      <Plus size={16} />
-                    </button>
-                  </div>
-                  <div className="w-20 text-right font-bold text-gray-800 dark:text-slate-100 shrink-0">
-                    ₹{(order.menuItem.price * order.quantity).toFixed(2)}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -1569,7 +1651,10 @@ export default function OrderMenu({ tables, selectedTableId, onSelectTable, onUp
           setDiscountType('amount');
           setDiscountReason('');
           try {
-            if (table) localStorage.removeItem(`table_discount_meta_${table.id}`);
+            if (table) {
+              localStorage.removeItem(`table_discount_meta_${table.id}`);
+              localStorage.removeItem(`table_active_cart_${table.id}`);
+            }
           } catch (_) {}
           onUpdateOrder(table.id, []);
           if (table) {
